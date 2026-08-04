@@ -1,0 +1,102 @@
+name: Deploy Swiviq to Production
+
+# swiviq.com — site de l'entreprise (Angular SSR :4002 + API Node :4001,
+# pm2 « swiviq-ssr » / « swiviq-api » sur le VPS).
+#
+# Reproduit le deploy.sh local qui a toujours servi : build du front en CI,
+# archive (dist + sources backend + ecosystem), envoi, npm ci production,
+# pm2 startOrReload. Le .env de production vit sur le VPS et n'est JAMAIS
+# dans le dépôt ni dans l'archive.
+#
+# Secrets requis sur CE dépôt (Settings ▸ Secrets ▸ Actions) :
+#   VPS_HOST, VPS_USER, VPS_PASSWORD — mêmes valeurs que center_atlas_front.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # L'archive ne doit contenir aucun secret : si env.production entre un
+      # jour dans le dépôt par erreur, on s'arrête net ici.
+      - name: Guard - no secrets in repo
+        run: |
+          if [ -f deploy/env.production ]; then
+            echo "::error::deploy/env.production est dans le dépôt — il contient les mots de passe de production. Retirez-le (git rm --cached) et faites tourner les secrets."
+            exit 1
+          fi
+          echo "Aucun fichier de secrets dans le dépôt"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend (Angular SSR)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package release
+        run: |
+          mkdir -p .release/frontend .release/backend
+          cp -r frontend/dist .release/frontend/dist
+          cp frontend/package.json frontend/package-lock.json .release/frontend/
+          cp -r backend/src .release/backend/src
+          cp backend/package.json backend/package-lock.json .release/backend/
+          cp deploy/ecosystem.config.cjs .release/
+          tar -czf release.tar.gz -C .release .
+          ls -lh release.tar.gz
+
+      - name: Upload release to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          source: "release.tar.gz"
+          target: "/tmp/swiviq-release-${{ github.sha }}"
+
+      - name: Install and reload on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          timeout: 600s
+          command_timeout: 15m
+          script: |
+            set -e
+            cd /var/www/swiviq
+            tar -xzf /tmp/swiviq-release-${{ github.sha }}/release.tar.gz
+            rm -rf /tmp/swiviq-release-${{ github.sha }}
+            (cd backend  && npm ci --omit=dev --silent)
+            (cd frontend && npm ci --omit=dev --silent)
+            pm2 startOrReload ecosystem.config.cjs --only swiviq-api,swiviq-ssr
+            pm2 save --force
+
+      # Vérification réelle : le site répond, pas seulement « pm2 dit online ».
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          script: |
+            sleep 3
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 20 https://swiviq.com/)
+            [ "$CODE" = "200" ] || { echo "https://swiviq.com répond $CODE"; pm2 logs swiviq-ssr --lines 20 --nostream; exit 1; }
+            echo "Swiviq déployé : https://swiviq.com répond 200"

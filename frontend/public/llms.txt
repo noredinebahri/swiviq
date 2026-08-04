@@ -1,0 +1,39 @@
+# SWIVIQ
+
+> SWIVIQ SARL AU est une agence digitale marocaine basée à Rabat, spécialisée dans la
+> création d'applications web et mobiles, l'édition de solutions SaaS & Cloud,
+> l'e-commerce, l'intermédiation numérique, la conciergerie digitale, l'événementiel
+> digital et le conseil en ingénierie informatique. Devis en ligne instantané avec
+> PDF automatique en 2 minutes.
+
+## Services (prix de départ indicatifs, MAD HT)
+
+- [Applications web](https://swiviq.com/services/web-app) : applications web sur mesure (Angular, Node.js, SSR) — à partir de 25 000 MAD.
+- [Applications mobiles](https://swiviq.com/services/mobile-app) : iOS & Android (Flutter, React Native) — à partir de 35 000 MAD.
+- [SaaS & Cloud](https://swiviq.com/services/saas) : conception et édition de solutions SaaS par abonnement — à partir de 45 000 MAD.
+- [E-commerce](https://swiviq.com/services/ecommerce) : boutiques en ligne avec paiement CMI et à la livraison — à partir de 18 000 MAD.
+- [Intermédiation numérique](https://swiviq.com/services/intermediation) : marketplaces et plateformes de mise en relation — à partir de 15 000 MAD.
+- [Conciergerie digitale](https://swiviq.com/services/conciergerie) : digitalisation des services de conciergerie — à partir de 12 000 MAD.
+- [Événementiel digital](https://swiviq.com/services/evenementiel) : billetterie en ligne, live streaming, événements hybrides — à partir de 10 000 MAD.
+- [Conseil IT](https://swiviq.com/services/conseil) : audit technique, architecture, reprise de projets — à partir de 8 000 MAD.
+
+## Produits édités par SWIVIQ
+
+- [SWIVIQ Cloud](https://swiviq.com/produits/swiviq-cloud)
+- [SWIVIQ Conciergerie](https://swiviq.com/produits/swiviq-conciergerie)
+- [TransferVVIP](https://swiviq.com/produits/transfervvip)
+- [SWIVIQ Flow](https://swiviq.com/produits/swiviq-flow)
+
+## Pages utiles
+
+- [Devis en ligne instantané](https://swiviq.com/devis) : estimation en temps réel avec PDF automatique en 2 minutes.
+- [Contact](https://swiviq.com/contact) : contact@swiviq.com — Rabat, Maroc.
+- [À propos](https://swiviq.com/a-propos) : l'agence, sa méthode et ses informations légales.
+
+## Informations légales
+
+SWIVIQ SARL AU — Capital 100 000 MAD — ICE 003963563000019 — IF 73099178 — RC 200173 (Tribunal de Commerce de Rabat).
+Siège : Imm 30, Appt 8, Rue Moulay Ahmed Loukili, Hassan, Rabat, Maroc.
+Zone d'intervention : Rabat, Casablanca et tout le Maroc.
+
+Dernière mise à jour : 2026-08-04

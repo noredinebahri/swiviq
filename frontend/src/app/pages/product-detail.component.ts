@@ -1,0 +1,514 @@
+import { Component, inject, OnInit, signal, PLATFORM_ID } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { TPipe } from '../core/i18n/i18n.service';
+import { SeoService, SITE_URL } from '../core/seo.service';
+import { RevealDirective } from '../shared/reveal.directive';
+import { SceneSpyDirective } from '../shared/scene-spy.directive';
+import { ApiService, Product, Plan } from '../core/api.service';
+
+@Component({
+  selector: 'svq-product-detail',
+  imports: [RouterLink, TPipe, RevealDirective, SceneSpyDirective, CommonModule, FormsModule],
+  template: `
+    @if (loading()) {
+      <div class="loader section"><span class="spinner"></span></div>
+    } @else if (notFound()) {
+      <section class="section">
+        <div class="container center">
+          <h1 class="pg-title">{{ 'products.notFound' | t }}</h1>
+          <a routerLink="/produits" class="btn btn--primary mt-2">{{ 'products.backToProducts' | t }}</a>
+        </div>
+      </section>
+    } @else {
+      <!-- ============ HERO ============ -->
+      <section class="pdet-hero section--dark">
+        <div class="pdet-hero__bg" aria-hidden="true"></div>
+        <div class="container pdet-hero__in">
+          <div class="pdet-hero__copy" svqReveal>
+            <div class="pdet-hero__badges">
+              <span class="chip pdet-badge" [class]="typeClass()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  @if (product().type === 'app') {<rect x="2" y="3" width="20" height="18" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>}
+                  @if (product().type === 'website') {<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>}
+                  @if (product().type === 'saas') {<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>}
+                </svg>
+                {{ typeLabel() | t }}
+              </span>
+              @if (product().status !== 'live') {
+                <span class="chip pdet-status" [class]="'status-' + product().status">{{ statusLabel() | t }}</span>
+              }
+            </div>
+            <h1 svqReveal class="reveal-d1">{{ product().name }}</h1>
+            <p svqReveal class="reveal-d2 pdet-hero__tag">{{ product().tagline }}</p>
+            <div svqReveal class="reveal-d3 pdet-hero__meta">
+              @if (product().websiteUrl) {
+                <a [href]="product().websiteUrl" target="_blank" rel="noopener" class="btn btn--ghost btn--sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  {{ 'products.visitWebsite' | t }}
+                </a>
+              }
+              @if (product().repoUrl) {
+                <a [href]="product().repoUrl" target="_blank" rel="noopener" class="btn btn--ghost btn--sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                  Dépôt
+                </a>
+              }
+            </div>
+          </div>
+          <div class="pdet-hero__art" svqReveal>
+            <img [src]="product().coverUrl" [alt]="product().name" class="pdet-cover" loading="eager" />
+            <div class="pdet-cover__glow" aria-hidden="true"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ DESCRIPTION + TECH ============ -->
+      <section class="section">
+        <div class="container">
+          <div class="grid grid-2" style="align-items: start;">
+            <div svqReveal class="reveal-d1">
+              <div class="pdet-desc"><p>{{ product().description }}</p></div>
+              <div class="pdet-features" svqReveal>
+                <h3>{{ 'products.features' | t }}</h3>
+                <ul>
+                  @for (f of product().features; track f) {
+                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--c-primary)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>{{ f }}</li>
+                  }
+                </ul>
+              </div>
+            </div>
+            <aside svqReveal class="reveal-d2">
+              <div class="tech-panel card">
+                <h3>{{ 'products.technologies' | t }}</h3>
+                <div class="tech-cloud">
+                  @for (tech of product().technologies; track tech) {
+                    <span class="tech-pill">{{ tech }}</span>
+                  }
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ STORY (cinematic gallery) ============ -->
+      @if (product().photos.length) {
+        <section class="section section--dark story-section">
+          <div class="container">
+            <div class="section-head center" svqReveal>
+              <span class="eyebrow">{{ 'products.gallery' | t }}</span>
+              <h2 class="section-title story-headline">{{ 'products.storyTitle' | t }}</h2>
+              <p class="story-sub">{{ 'products.storySub' | t }}</p>
+            </div>
+            <div class="story">
+              <!-- Interactive timeline rail -->
+              <div class="story__rail" aria-hidden="true">
+                <span class="story__rail-line"></span>
+                @for (photo of product().photos; track $index; let i = $index) {
+                  <button
+                    type="button"
+                    class="story__node"
+                    [class.active]="activeScene() === i"
+                    [class.passed]="i < activeScene()"
+                    [style.--brand]="brand()"
+                    (click)="scrollToScene(i)"
+                    [attr.aria-label]="'Photo ' + (i + 1)"
+                    tabindex="-1"
+                  >{{ pad(i + 1) }}</button>
+                }
+              </div>
+              <!-- Scenes -->
+              <div class="story__scenes">
+                @for (photo of product().photos; track $index; let i = $index) {
+                  <article
+                    class="story__scene"
+                    [class.flip]="i % 2 === 1"
+                    [id]="'scene-' + i"
+                    svqReveal
+                    [svqSceneSpy]="i"
+                    (active)="activeScene.set($event)"
+                  >
+                    <figure class="story__media" (click)="openLightbox(i)" [style.--brand]="brand()">
+                      <img [src]="photo.url" [alt]="photo.title || product().name" loading="lazy" />
+                      <span class="story__zoom">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                      </span>
+                    </figure>
+                    <div class="story__card" [style.--brand]="brand()">
+                      <span class="story__chapter">{{ 'products.scene' | t }} {{ pad(i + 1) }} <em>/ {{ pad(product().photos.length) }}</em></span>
+                      @if (photo.title) { <h3>{{ photo.title }}</h3> }
+                      @if (photo.description) { <p>{{ photo.description }}</p> }
+                    </div>
+                  </article>
+                }
+              </div>
+            </div>
+          </div>
+        </section>
+      }
+
+      <!-- ============ LIGHTBOX ============ -->
+      @if (lightboxOpen()) {
+        <div class="lb" (click)="closeLightbox()">
+          <button class="lb__close" (click)="closeLightbox()">&times;</button>
+          <div class="lb__in" (click)="$event.stopPropagation()">
+            <img [src]="product().photos[lightboxIdx()].url" [alt]="product().photos[lightboxIdx()].title" />
+            <div class="lb__cap">
+              <h4>{{ product().photos[lightboxIdx()].title }}</h4>
+              <p>{{ product().photos[lightboxIdx()].description }}</p>
+            </div>
+            <div class="lb__nav">
+              <button (click)="prevPhoto()" [disabled]="lightboxIdx() === 0">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <span>{{ lightboxIdx() + 1 }} / {{ product().photos.length }}</span>
+              <button (click)="nextPhoto()" [disabled]="lightboxIdx() === product().photos.length - 1">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ============ PRICING SAAS ============ -->
+      @if (product().type === 'saas' && product().plans.length) {
+        <section class="section">
+          <div class="container">
+            <div class="section-head center" svqReveal>
+              <span class="eyebrow">{{ 'products.gallery' | t }}</span>
+            </div>
+            <div class="pricing-grid" svqReveal>
+              @for (plan of sortedPlans(); track plan.id; let i = $index) {
+                <article class="pplan" [class.popular]="plan.highlighted">
+                  @if (plan.highlighted) { <div class="pplan__badge">{{ 'products.mostPopular' | t }}</div> }
+                  <header>
+                    <h3>{{ plan.name }}</h3>
+                    <div class="pplan__price">
+                      <span class="amount">{{ plan.price | number:'1.0-0' }}</span>
+                      <span class="currency">{{ plan.currency }}</span>
+                      <span class="interval">{{ intervalLabel(plan.interval) | t }}</span>
+                    </div>
+                    @if (plan.tagline) { <p class="pplan__tag">{{ plan.tagline }}</p> }
+                  </header>
+                  <ul class="pplan__features">
+                    @for (feat of plan.features; track feat) {
+                      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--c-success)" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>{{ feat }}</li>
+                    }
+                  </ul>
+                  <footer>
+                    <button class="btn btn--primary" [class.btn--ghost]="!plan.highlighted" (click)="openSubscribe(plan)" [disabled]="submitting()">
+                      @if (submitting() && currentPlanId() === plan.id) { <span class="spinner"></span> } @else { {{ plan.ctaLabel || ('products.choosePlan' | t) }} }
+                    </button>
+                  </footer>
+                </article>
+              }
+            </div>
+          </div>
+        </section>
+      }
+
+      <!-- ============ SUBSCRIBE MODAL ============ -->
+      @if (showSubscribe()) {
+        <div class="modal-backdrop" (click)="closeSubscribe()">
+          <div class="modal" (click)="$event.stopPropagation()">
+            <button class="modal__close" (click)="closeSubscribe()" aria-label="Fermer">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <h2>{{ 'products.subscribeTitle' | t }}</h2>
+            <p class="modal__sub">{{ 'products.subscribeSub' | t }}</p>
+            <div class="modal__plan">
+              <strong>{{ selectedPlan()?.name }}</strong>
+              <span>{{ selectedPlan()?.price | number:'1.0-0' }} {{ selectedPlan()?.currency }} {{ intervalLabel(selectedPlan()?.interval) | t }}</span>
+            </div>
+            <form (ngSubmit)="submitSubscribe()" class="modal__form">
+              <div class="field"><label>{{ 'products.yourName' | t }}</label><input type="text" [(ngModel)]="subForm.name" name="sname" required /></div>
+              <div class="field"><label>{{ 'products.yourEmail' | t }}</label><input type="email" [(ngModel)]="subForm.email" name="semail" required /></div>
+              <div class="field"><label>{{ 'products.yourCompany' | t }}</label><input type="text" [(ngModel)]="subForm.company" name="scompany" /></div>
+              <div class="field"><label>{{ 'products.yourPhone' | t }}</label><input type="tel" [(ngModel)]="subForm.phone" name="sphone" /></div>
+              @if (subError()) { <p class="err">{{ subError() }}</p> }
+              <button class="btn btn--primary" type="submit" [disabled]="submitting()">
+                @if (submitting()) { <span class="spinner"></span> } @else { {{ 'products.submit' | t }} }
+              </button>
+            </form>
+          </div>
+        </div>
+      }
+
+      <!-- ============ SUCCESS ============ -->
+      @if (subSuccess()) {
+        <div class="modal-backdrop">
+          <div class="modal">
+            <div class="success-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--c-success)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="16 10 10 16 6 12"/></svg></div>
+            <h2>{{ 'products.success' | t }}</h2>
+            <p class="modal__sub">{{ 'products.successSub' | t }} {{ subRef() }}</p>
+            <p class="modal__msg">{{ 'products.successMsg' | t }}</p>
+            <a routerLink="/produits" class="btn btn--primary mt-2">{{ 'products.backToProducts' | t }}</a>
+          </div>
+        </div>
+      }
+    }
+  `,
+  styles: [`
+    .loader { display: grid; place-items: center; min-height: 40vh; }
+    .mt-2 { margin-top: 1rem; }
+
+    /* HERO */
+    .pdet-hero { position: relative; padding-top: calc(var(--header-h) + 3rem); padding-bottom: 4rem; overflow: hidden; }
+    .pdet-hero__bg { position: absolute; inset: 0; background: var(--grad-hero); pointer-events: none; }
+    .pdet-hero__in { position: relative; display: grid; grid-template-columns: 1.1fr .9fr; gap: 3rem; align-items: start; }
+    .pdet-hero__badges { display: flex; gap: .6rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .pdet-badge { background: var(--grad-brand-soft); color: var(--c-primary); border: 1px solid rgba(116,83,242,.2); }
+    .pdet-status { background: rgba(245,158,11,.15); color: #b45309; border-color: rgba(245,158,11,.3); }
+    .pdet-status.status-coming-soon { background: rgba(116,83,242,.15); color: var(--c-primary); border-color: rgba(116,83,242,.3); }
+    .pdet-hero h1 { color: #fff; font-size: clamp(2rem, 4vw, 3.2rem); margin-bottom: .8rem; }
+    .pdet-hero__tag { color: var(--c-text-inverse-soft); font-size: 1.1rem; max-width: 520px; margin-bottom: 1.2rem; }
+    .pdet-hero__meta { display: flex; gap: .8rem; flex-wrap: wrap; }
+    .pdet-hero__art { position: relative; }
+    .pdet-cover { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); border: 1px solid rgba(255,255,255,.1); }
+    .pdet-cover__glow { position: absolute; inset: -30px; border-radius: var(--radius-xl); opacity: .6; filter: blur(40px); background: radial-gradient(400px 200px at 50% 100%, rgba(116,83,242,.6), transparent 60%); pointer-events: none; }
+    @media (max-width:960px) { .pdet-hero__in { grid-template-columns:1fr; } .pdet-hero__art { max-width:480px; margin-inline:auto; } }
+
+    /* DESC */
+    .pdet-desc p { font-size: 1.02rem; color: var(--c-text-soft); line-height: 1.8; margin-bottom: 2rem; }
+    .pdet-features h3 { margin-bottom: 1rem; }
+    .pdet-features ul { list-style: none; display: grid; gap: .7rem; }
+    .pdet-features li { display: flex; align-items: flex-start; gap: .7rem; font-size: .96rem; }
+    .pdet-features svg { flex-shrink: 0; margin-top: .1rem; }
+
+    /* TECH */
+    .tech-panel { position: sticky; top: calc(var(--header-h) + 2rem); }
+    .tech-panel h3 { margin-bottom: 1rem; }
+    .tech-cloud { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .tech-pill { padding: .45rem .8rem; border-radius: 999px; font-size: .84rem; font-weight: 600; background: var(--c-surface); color: var(--c-text-soft); border: 1px solid var(--c-border); transition: .2s; }
+    .tech-pill:hover { background: var(--grad-brand-soft); color: var(--c-primary); border-color: transparent; }
+
+    /* STORY — cinematic scroll gallery */
+    .story-section { position: relative; overflow: hidden; }
+    .story-headline { color: #fff; }
+    .story-sub { color: var(--c-text-inverse-soft); max-width: 560px; margin: .8rem auto 0; }
+    .story { display: grid; grid-template-columns: 72px 1fr; gap: 2.5rem; margin-top: 3.5rem; }
+
+    /* Timeline rail */
+    .story__rail { position: sticky; top: 30vh; align-self: start; display: flex; flex-direction: column; align-items: center; gap: 1.1rem; padding: .5rem 0; }
+    .story__rail-line { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,.1); border-radius: 2px; }
+    .story__node {
+      position: relative; z-index: 1; width: 40px; height: 40px; border-radius: 50%;
+      display: grid; place-items: center; cursor: pointer;
+      background: var(--c-ink-3); color: var(--c-text-inverse-soft);
+      border: 1.5px solid rgba(255,255,255,.15);
+      font-size: .78rem; font-weight: 700; font-family: var(--font-display);
+      transition: transform .35s var(--ease-out), background .35s, color .35s, border-color .35s, box-shadow .35s;
+    }
+    .story__node:hover { border-color: var(--brand, var(--c-primary)); color: #fff; transform: scale(1.08); }
+    .story__node.passed { background: var(--c-ink-2); color: #fff; border-color: rgba(255,255,255,.3); }
+    .story__node.active {
+      background: var(--brand, var(--c-primary)); border-color: transparent; color: #fff;
+      transform: scale(1.25); box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand, var(--c-primary)) 25%, transparent), 0 8px 24px color-mix(in srgb, var(--brand, var(--c-primary)) 45%, transparent);
+    }
+
+    /* Scenes */
+    .story__scenes { display: flex; flex-direction: column; gap: clamp(4rem, 8vw, 7rem); }
+    .story__scene { display: grid; grid-template-columns: 1.15fr .85fr; align-items: center; }
+    .story__scene.flip { grid-template-columns: .85fr 1.15fr; }
+    .story__scene.flip .story__media { order: 2; }
+    .story__scene.flip .story__card { order: 1; justify-self: end; margin-inline-end: -3.5rem; margin-inline-start: 0; }
+
+    .story__media {
+      position: relative; margin: 0; border-radius: var(--radius-xl); overflow: hidden; cursor: zoom-in;
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: 0 30px 80px rgba(0,0,0,.5);
+      transition: transform .6s var(--ease-out), box-shadow .6s var(--ease-out);
+    }
+    .story__media img { width: 100%; aspect-ratio: 16/10; object-fit: cover; display: block; transition: transform .8s var(--ease-out); }
+    .story__media:hover { transform: translateY(-6px) rotate(-.4deg); box-shadow: 0 40px 100px rgba(0,0,0,.6), 0 0 70px color-mix(in srgb, var(--brand, var(--c-primary)) 30%, transparent); }
+    .story__media:hover img { transform: scale(1.045); }
+    .story__media:hover .story__zoom { opacity: 1; transform: translate(0, 0); }
+    .story__zoom {
+      position: absolute; bottom: 1rem; inset-inline-end: 1rem; width: 42px; height: 42px; border-radius: 50%;
+      display: grid; place-items: center; color: #fff;
+      background: color-mix(in srgb, var(--brand, var(--c-primary)) 85%, black);
+      opacity: 0; transform: translate(6px, 6px); transition: .35s var(--ease-out);
+      box-shadow: 0 8px 20px rgba(0,0,0,.4);
+    }
+
+    .story__card {
+      position: relative; z-index: 2; margin-inline-start: -3.5rem; max-width: 420px;
+      padding: 1.8rem 1.9rem; border-radius: var(--radius-xl);
+      background: rgba(23, 23, 28, .72); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,.12); border-top: 3px solid var(--brand, var(--c-primary));
+      box-shadow: 0 24px 60px rgba(0,0,0,.45); color: #fff;
+    }
+    .story__chapter {
+      display: inline-block; font-family: var(--font-display); font-size: .72rem; font-weight: 700;
+      letter-spacing: .14em; text-transform: uppercase; color: var(--brand, var(--c-primary)); margin-bottom: .6rem;
+    }
+    .story__chapter em { font-style: normal; opacity: .5; }
+    .story__card h3 { font-size: 1.35rem; margin-bottom: .5rem; }
+    .story__card p { color: var(--c-text-inverse-soft); font-size: .95rem; line-height: 1.7; }
+
+    /* Scene entrance (plays when svqReveal adds .is-visible) */
+    .story__scene .story__media { opacity: 0; transform: translateY(40px) scale(.96); transition: opacity .8s var(--ease-out), transform .8s var(--ease-out), box-shadow .6s var(--ease-out); }
+    .story__scene .story__card { opacity: 0; transform: translateY(30px); transition: opacity .8s var(--ease-out) .18s, transform .8s var(--ease-out) .18s; }
+    .story__scene.is-visible .story__media { opacity: 1; transform: none; }
+    .story__scene.is-visible .story__card { opacity: 1; transform: none; }
+    .story__scene.is-visible .story__media:hover { transform: translateY(-6px) rotate(-.4deg); }
+    @media (prefers-reduced-motion: reduce) {
+      .story__scene .story__media, .story__scene .story__card { opacity: 1; transform: none; transition: none; }
+    }
+
+    @media (max-width: 860px) {
+      .story { grid-template-columns: 1fr; gap: 2rem; margin-top: 2.5rem; }
+      .story__rail { position: static; flex-direction: row; justify-content: center; padding: 0; }
+      .story__rail-line { display: none; }
+      .story__scene, .story__scene.flip { grid-template-columns: 1fr; gap: 0; }
+      .story__scene.flip .story__media { order: 0; }
+      .story__scene.flip .story__card { order: 1; }
+      .story__card, .story__scene.flip .story__card {
+        margin: -2.2rem 1rem 0; justify-self: stretch; max-width: none;
+      }
+    }
+
+    /* LIGHTBOX */
+    .lb { position: fixed; inset: 0; z-index: 300; background: rgba(15,15,15,.92); backdrop-filter: blur(8px); display: grid; place-items: center; padding: 1.5rem; }
+    .lb__close { position: absolute; top: 1.5rem; inset-inline-end: 1.5rem; color: #fff; font-size: 2.5rem; width: 48px; height: 48px; display: grid; place-items: center; transition: .2s; }
+    .lb__close:hover { opacity: .7; }
+    .lb__in { max-width: 800px; width: 100%; }
+    .lb__in img { width: 100%; max-height: 70vh; object-fit: contain; border-radius: var(--radius); }
+    .lb__cap { color: #fff; text-align: center; margin-top: 1rem; }
+    .lb__cap h4 { font-size: 1.2rem; }
+    .lb__cap p { font-size: .9rem; color: var(--c-text-inverse-soft); }
+    .lb__nav { display: flex; align-items: center; justify-content: center; gap: 1.5rem; margin-top: 1rem; }
+    .lb__nav button { color: #fff; opacity: .7; transition: .2s; }
+    .lb__nav button:hover:not(:disabled) { opacity: 1; }
+    .lb__nav button:disabled { opacity: .3; cursor: default; }
+    .lb__nav span { color: var(--c-text-inverse-soft); font-size: .9rem; }
+
+    /* PRICING */
+    .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.8rem; }
+    @media (max-width:960px) { .pricing-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width:640px) { .pricing-grid { grid-template-columns: 1fr; } }
+    .pplan { position: relative; background: #fff; border: 1px solid var(--c-border); border-radius: var(--radius-xl); padding: 2.5rem 2rem; display: flex; flex-direction: column; transition: .4s var(--ease-out); }
+    .pplan:hover { box-shadow: var(--shadow-lg); border-color: rgba(116,83,242,.3); transform: translateY(-6px); }
+    .pplan.popular { border-color: var(--c-primary); box-shadow: var(--shadow-brand); }
+    .pplan__badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--grad-brand); color: #fff; font-size: .7rem; font-weight: 700; padding: .35rem 1rem; border-radius: 999px; text-transform: uppercase; letter-spacing: .08em; box-shadow: var(--shadow-brand); white-space: nowrap; }
+    .pplan header { margin-bottom: 1.5rem; }
+    .pplan h3 { font-size: 1.2rem; margin-bottom: .8rem; }
+    .pplan__price { display: flex; align-items: baseline; gap: .2rem; margin-bottom: .4rem; }
+    .pplan__price .amount { font-family: var(--font-display); font-size: 2.8rem; font-weight: 700; color: var(--c-ink); }
+    .pplan__price .currency { font-size: 1.1rem; font-weight: 600; color: var(--c-text-soft); }
+    .pplan__price .interval { font-size: .85rem; color: var(--c-text-soft); }
+    .pplan__tag { font-size: .88rem; color: var(--c-text-soft); }
+    .pplan__features { list-style: none; flex: 1; margin-bottom: 1.5rem; display: grid; gap: .7rem; }
+    .pplan__features li { display: flex; align-items: flex-start; gap: .6rem; font-size: .9rem; color: var(--c-text); }
+    .pplan__features svg { flex-shrink: 0; margin-top: .1rem; }
+    .pplan footer { display: flex; flex-direction: column; gap: .5rem; }
+    .pplan .btn { width: 100%; }
+
+    /* MODAL */
+    .modal-backdrop { position: fixed; inset: 0; z-index: 200; background: rgba(15,15,15,.7); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 1.5rem; }
+    .modal { width: min(480px, 100%); background: #fff; border-radius: var(--radius-xl); padding: 2.5rem 2rem; position: relative; box-shadow: var(--shadow-lg); }
+    .modal__close { position: absolute; top: 1rem; inset-inline-end: 1rem; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--c-text-soft); transition: .2s; }
+    .modal__close:hover { background: var(--c-surface); color: var(--c-ink); }
+    .modal h2 { margin-bottom: .4rem; }
+    .modal__sub { color: var(--c-text-soft); margin-bottom: 1.2rem; }
+    .modal__plan { display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: var(--c-surface); border-radius: var(--radius); margin-bottom: 1.5rem; }
+    .modal__plan strong { color: var(--c-ink); }
+    .modal__plan span { color: var(--c-primary); font-weight: 700; }
+    .modal__form { display: grid; gap: 1rem; }
+    .err { color: var(--c-danger); font-size: .82rem; }
+    .success-icon { display: grid; place-items: center; margin-bottom: 1rem; }
+    .modal__msg { color: var(--c-text-soft); font-size: .95rem; margin-bottom: 1.5rem; }
+  `],
+})
+export class ProductDetailComponent implements OnInit {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private seo = inject(SeoService);
+  private api = inject(ApiService);
+  private platformId = inject(PLATFORM_ID);
+
+  product = signal<Product>({ slug: '', type: 'app', name: '', tagline: '', description: '', coverUrl: '', technologies: [], features: [], photos: [], plans: [], status: 'live', order: 0 });
+  loading = signal(true);
+  notFound = signal(false);
+
+  lightboxOpen = signal(false);
+  lightboxIdx = signal(0);
+  activeScene = signal(0);
+
+  showSubscribe = signal(false);
+  selectedPlan = signal<Plan | null>(null);
+  currentPlanId = signal<string | null>(null);
+  subForm = { name: '', email: '', company: '', phone: '' };
+  subError = signal<string | null>(null);
+  submitting = signal(false);
+  subSuccess = signal(false);
+  subRef = signal('');
+
+  ngOnInit() {
+    this.route.paramMap.subscribe(params => {
+      const slug = params.get('slug') ?? '';
+      this.load(slug);
+    });
+  }
+
+  load(slug: string) {
+    this.loading.set(true); this.notFound.set(false);
+    this.api.getProduct(slug).subscribe({
+      next: p => { this.product.set(p); this.loading.set(false); this.applySeo(p); },
+      error: () => { this.notFound.set(true); this.loading.set(false); }
+    });
+  }
+
+  applySeo(p: Product) {
+    this.seo.apply({
+      title: `${p.name} — ${p.tagline} | SWIVIQ`,
+      description: p.description.slice(0, 160), path: `/produits/${p.slug}`,
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': p.type === 'saas' ? 'SoftwareApplication' : p.type === 'app' ? 'MobileApplication' : 'WebApplication',
+        name: p.name, description: p.description, url: `${SITE_URL}/produits/${p.slug}`,
+        image: p.coverUrl, provider: { '@id': `${SITE_URL}/#organization` }
+      }
+    });
+  }
+
+  typeClass() { return ''; }
+  typeLabel() { const t = this.product().type; return t === 'saas' ? 'products.typeSaaS' : t === 'app' ? 'products.typeApp' : 'products.typeWebsite'; }
+  statusLabel() { const s = this.product().status; return s === 'beta' ? 'products.beta' : 'products.comingSoon'; }
+  sortedPlans() { return [...this.product().plans].sort((a, b) => a.price - b.price); }
+  intervalLabel(i?: string) { return i === 'year' ? 'products.perYear' : i === 'one-time' ? 'products.oneTime' : 'products.perMonth'; }
+
+  openLightbox(i: number) { this.lightboxIdx.set(i); this.lightboxOpen.set(true); }
+  closeLightbox() { this.lightboxOpen.set(false); }
+  prevPhoto() { if (this.lightboxIdx() > 0) this.lightboxIdx.update(i => i - 1); }
+  nextPhoto() { if (this.lightboxIdx() < this.product().photos.length - 1) this.lightboxIdx.update(i => i + 1); }
+
+  /* Story gallery */
+  brand() { return this.product().brandColor || '#7435F2'; }
+  pad(n: number) { return String(n).padStart(2, '0'); }
+  scrollToScene(i: number) {
+    if (!isPlatformBrowser(this.platformId)) return;
+    document.getElementById('scene-' + i)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  openSubscribe(plan: Plan) {
+    this.selectedPlan.set(plan); this.currentPlanId.set(plan.id ?? null);
+    this.showSubscribe.set(true); this.subError.set(null);
+    this.subForm = { name: '', email: '', company: '', phone: '' };
+  }
+  closeSubscribe() { this.showSubscribe.set(false); this.selectedPlan.set(null); this.currentPlanId.set(null); }
+
+  submitSubscribe() {
+    if (!this.subForm.name || !this.subForm.email || !this.selectedPlan()) return;
+    this.submitting.set(true); this.subError.set(null);
+    this.api.subscribe(this.product().slug, {
+      planId: this.selectedPlan()!.id!, name: this.subForm.name,
+      email: this.subForm.email, company: this.subForm.company, phone: this.subForm.phone
+    }).subscribe({
+      next: res => { this.submitting.set(false); this.showSubscribe.set(false); this.subRef.set(res.number); this.subSuccess.set(true); },
+      error: e => { this.submitting.set(false); this.subError.set(e.error?.error || 'Erreur'); }
+    });
+  }
+}

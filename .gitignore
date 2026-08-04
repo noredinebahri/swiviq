@@ -1,0 +1,36 @@
+# ── Secrets — NE JAMAIS COMMITER ─────────────────────────────────────────
+# env.production contient les vrais mots de passe (BDD, JWT, admin).
+# Il vit sur le VPS (/var/www/swiviq/backend/.env) et dans deploy/ en local,
+# hors dépôt. Un secret déjà poussé sur GitHub est un secret brûlé.
+deploy/env.production
+.env
+*.env
+!deploy/env.example
+
+# ── Dépendances et builds ────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+.release/
+.release.tar.gz
+.angular/
+
+# ── Journaux ─────────────────────────────────────────────────────────────
+*.log
+
+# ── Données déposées par les utilisateurs (pas du code) ──────────────────
+backend/uploads/
+
+# ── Fichiers personnels qui traînent à la racine du dossier ──────────────
+# (CV, attestations, photos : rien à faire dans le dépôt du projet)
+*.jpg
+*.jpeg
+*.png
+*.PDF
+*.pdf
+*.docx
+!frontend/public/**
+!frontend/src/assets/**
+
+# ── Divers Windows ───────────────────────────────────────────────────────
+nul
+Thumbs.db
