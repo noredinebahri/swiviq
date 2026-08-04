@@ -36,6 +36,15 @@ app.use(
 );
 app.use(express.json({ limit: '100kb' }));
 
+// L'API sert des données vivantes (produits, tarifs) : aucune réponse ne doit
+// être conservée par le navigateur. Sans cet en-tête, Express n'envoie qu'un
+// ETag et le navigateur ressert sa copie disque revalidée — les visiteurs
+// voyaient les anciens produits tant qu'ils ne faisaient pas Ctrl+F5.
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 // Debug: log ALL requests early (BEFORE rate limiter)
 app.use((req, res, next) => {
   console.log('[REQ]', req.method, req.path);
