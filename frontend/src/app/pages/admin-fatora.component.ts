@@ -13,6 +13,8 @@ interface FatoraTenant {
   hasStamp: boolean; hasLogo: boolean;
   plan: string; planLabel: string; price: number;
   used: number; limit: number; remaining: number; exhausted: boolean;
+  planUntil?: string | null; expired?: boolean; daysLeft?: number | null;
+  suspended?: boolean; note?: string;
   invoices?: number; lastInvoiceAt?: string | null; createdAt: string;
   clients?: number;
   clientList?: { id: number; name: string; ice: string | null; invoices: number; since: string }[];
@@ -21,7 +23,16 @@ interface FatoraTenant {
 interface FatoraStats {
   tenants: number; active: number; onboarding: number; trial: number; paying: number;
   exhausted: number; mrr: number; invoices: number; invoicesMonth: number; billedMonth: number;
-  cancelled?: number;
+  cancelled?: number; suspended?: number; expired?: number; expiringSoon?: number;
+}
+interface FatoraInvoice {
+  id: number; number: string; client: string; date: string;
+  totalTtc: number; status: string; tenantId: number; tenant: string;
+}
+interface AdminLogRow { at: string; action: string; detail: string; author: string; }
+interface EditForm {
+  companyName: string; ice: string; identFiscal: string; taxePro: string;
+  address: string; email: string; defaultVatRate: number; adminNote: string;
 }
 
 const PLAN_OPTIONS = [
@@ -47,8 +58,12 @@ const PLAN_OPTIONS = [
         <div class="kpi gold"><b>{{ s.mrr | number:'1.0-0' }} DH</b><span>Revenu mensuel</span></div>
         <div class="kpi"><b>{{ s.trial }}</b><span>En essai</span></div>
         <div class="kpi" [class.warn]="s.exhausted > 0"><b>{{ s.exhausted }}</b><span>Quota épuisé</span></div>
+        <div class="kpi" [class.warn]="(s.expiringSoon || 0) > 0"><b>{{ s.expiringSoon || 0 }}</b><span>Échéance sous 7 j</span></div>
+        <div class="kpi" [class.warn]="(s.expired || 0) > 0"><b>{{ s.expired || 0 }}</b><span>Abonnements expirés</span></div>
+        <div class="kpi" [class.warn]="(s.suspended || 0) > 0"><b>{{ s.suspended || 0 }}</b><span>Comptes suspendus</span></div>
         <div class="kpi"><b>{{ s.invoicesMonth }}</b><span>Factures ce mois</span></div>
         <div class="kpi"><b>{{ s.billedMonth | number:'1.0-0' }} DH</b><span>Facturé ce mois (hors annulées)</span></div>
+        <div class="kpi"><b>{{ s.cancelled || 0 }}</b><span>Factures annulées</span></div>
       </div>
     }
 
@@ -60,14 +75,51 @@ const PLAN_OPTIONS = [
         @for (p of plans; track p.key) { <option [value]="p.key">{{ p.label }}</option> }
       </select>
       <button class="btn btn--ghost btn--sm" (click)="load()">Actualiser</button>
+      <button class="btn btn--ghost btn--sm" (click)="exportCsv()">Export CSV</button>
+      <button class="btn btn--ghost btn--sm" (click)="toggleInvoices()">
+        {{ showInvoices() ? 'Masquer les factures' : 'Gérer les factures' }}
+      </button>
     </div>
+
+    <!-- Gestion globale des factures : repérer et neutraliser les montants aberrants -->
+    @if (showInvoices()) {
+      <div class="card tbl-wrap inv-panel">
+        <div class="bar">
+          <input [(ngModel)]="invQ" (keyup.enter)="loadInvoices()" placeholder="N° de facture ou client…" />
+          <select [(ngModel)]="invSort" (change)="loadInvoices()">
+            <option value="amount">Montant décroissant</option>
+            <option value="recent">Plus récentes</option>
+          </select>
+          <button class="btn btn--ghost btn--sm" (click)="loadInvoices()">Chercher</button>
+        </div>
+        <table class="table">
+          <thead><tr><th>N°</th><th>Commerçant</th><th>Client</th><th>Date</th><th class="r">Montant</th><th></th></tr></thead>
+          <tbody>
+            @for (i of invoices(); track i.id) {
+              <tr [class.cancelled]="i.status === 'cancelled'">
+                <td><code>{{ i.number }}</code></td>
+                <td>{{ i.tenant }}</td>
+                <td>{{ i.client }}</td>
+                <td>{{ i.date | date:'dd/MM/yy' }}</td>
+                <td class="r"><strong>{{ i.totalTtc | number:'1.2-2' }} DH</strong></td>
+                <td class="r">
+                  <button class="btn btn--ghost btn--sm" (click)="setInvoiceStatus(i)">
+                    {{ i.status === 'cancelled' ? 'Rétablir' : 'Annuler' }}
+                  </button>
+                </td>
+              </tr>
+            } @empty { <tr><td colspan="6" class="empty-td">Aucune facture</td></tr> }
+          </tbody>
+        </table>
+      </div>
+    }
 
     <!-- Comptes -->
     <div class="card tbl-wrap">
       <table class="table">
         <thead><tr>
           <th>Entreprise</th><th>WhatsApp</th><th>Plan</th><th>Quota</th>
-          <th>Factures</th><th>Dernière</th><th>Actions</th>
+          <th>Échéance</th><th>Factures</th><th>Actions</th>
         </tr></thead>
         <tbody>
           @for (t of tenants(); track t.id) {
@@ -75,11 +127,11 @@ const PLAN_OPTIONS = [
               <td>
                 <strong>{{ t.company || '(inscription en cours)' }}</strong>
                 <div class="meta">
+                  @if (t.suspended) { <span class="tag ko">suspendu</span> }
                   @if (t.ice) { <span>ICE {{ t.ice }}</span> }
                   @if (t.voice) { <span class="tag">vocal</span> }
                   @if (t.hasStamp) { <span class="tag">cachet</span> }
                   @if (t.hasLogo) { <span class="tag">logo</span> }
-                  @if (t.lang) { <span class="tag">{{ t.lang }}</span> }
                 </div>
               </td>
               <td><code>+{{ t.phone }}</code></td>
@@ -93,8 +145,15 @@ const PLAN_OPTIONS = [
                 <div class="quota"><i [style.width.%]="pct(t)" [class.full]="t.exhausted"></i></div>
                 <div class="meta">{{ t.used }} / {{ t.limit }}</div>
               </td>
+              <td>
+                @if (t.plan === 'trial') { <span class="meta">—</span> }
+                @else if (t.expired) { <span class="tag ko">Expiré</span> }
+                @else {
+                  <span [class.soon]="(t.daysLeft ?? 99) <= 7">{{ t.planUntil | date:'dd/MM/yy' }}</span>
+                  <div class="meta">{{ t.daysLeft }} j</div>
+                }
+              </td>
               <td>{{ t.invoices || 0 }}</td>
-              <td>{{ t.lastInvoiceAt ? (t.lastInvoiceAt | date:'dd/MM/yy') : '—' }}</td>
               <td class="acts">
                 <button class="btn btn--ghost btn--sm" (click)="open(t)">Détail</button>
                 <button class="btn btn--ghost btn--sm" (click)="askMessage(t)">Message</button>
@@ -117,23 +176,59 @@ const PLAN_OPTIONS = [
             +{{ d.phone }} · {{ d.planLabel }} · {{ d.used }}/{{ d.limit }} factures ce mois
           </div>
 
-          <h3>Identité de l’entreprise</h3>
-          <div class="grid2">
-            <div class="full"><span>Raison sociale</span><b>{{ d.company || '— (inscription non terminée)' }}</b></div>
-            <div><span>ICE</span><b>{{ d.ice || '—' }}</b></div>
-            <div><span>Identifiant fiscal (IF)</span><b>{{ d.identFiscal || '—' }}</b></div>
-            <div><span>Taxe professionnelle</span><b>{{ d.taxePro || '—' }}</b></div>
-            <div><span>TVA par défaut</span><b>{{ d.vat }} %</b></div>
-            <div class="full"><span>Adresse</span><b>{{ d.address || '—' }}</b></div>
-            <div><span>WhatsApp</span><b>+{{ d.phone }}</b></div>
-            <div><span>Email</span><b>{{ d.email || '— (non communiqué)' }}</b></div>
+          <!-- Actions de gestion -->
+          <div class="acts-row">
+            <button class="btn btn--ghost btn--sm" (click)="editing.set(!editing())">
+              {{ editing() ? 'Annuler la modification' : '✏️ Modifier la fiche' }}
+            </button>
+            <button class="btn btn--ghost btn--sm" (click)="toggleSuspend(d)">
+              {{ d.suspended ? '▶️ Réactiver le compte' : '⏸️ Suspendre le compte' }}
+            </button>
+            <button class="btn btn--ghost btn--sm" (click)="giveCredit(d)">🎁 Offrir / prolonger</button>
+            <button class="btn btn--ghost btn--sm" (click)="askMessage(d)">💬 Message</button>
           </div>
+
+          <h3>Identité de l’entreprise</h3>
+          @if (editing()) {
+            <form class="editform" (ngSubmit)="saveEdit(d)">
+              <label>Raison sociale<input name="companyName" [(ngModel)]="form.companyName" /></label>
+              <div class="row3">
+                <label>ICE<input name="ice" [(ngModel)]="form.ice" /></label>
+                <label>IF<input name="identFiscal" [(ngModel)]="form.identFiscal" /></label>
+                <label>Taxe pro<input name="taxePro" [(ngModel)]="form.taxePro" /></label>
+              </div>
+              <label>Adresse<input name="address" [(ngModel)]="form.address" /></label>
+              <div class="row3">
+                <label>Email<input name="email" type="email" [(ngModel)]="form.email" /></label>
+                <label>TVA par défaut
+                  <select name="vat" [(ngModel)]="form.defaultVatRate">
+                    @for (v of [20,14,10,7,0]; track v) { <option [value]="v">{{ v }} %</option> }
+                  </select>
+                </label>
+              </div>
+              <label>Note interne (non visible du client)
+                <textarea name="note" rows="2" [(ngModel)]="form.adminNote"></textarea></label>
+              <button class="btn btn--primary btn--sm" type="submit">Enregistrer</button>
+            </form>
+          } @else {
+            <div class="grid2">
+              <div class="full"><span>Raison sociale</span><b>{{ d.company || '— (inscription non terminée)' }}</b></div>
+              <div><span>ICE</span><b>{{ d.ice || '—' }}</b></div>
+              <div><span>Identifiant fiscal (IF)</span><b>{{ d.identFiscal || '—' }}</b></div>
+              <div><span>Taxe professionnelle</span><b>{{ d.taxePro || '—' }}</b></div>
+              <div><span>TVA par défaut</span><b>{{ d.vat }} %</b></div>
+              <div class="full"><span>Adresse</span><b>{{ d.address || '—' }}</b></div>
+              <div><span>WhatsApp</span><b>+{{ d.phone }}</b></div>
+              <div><span>Email</span><b>{{ d.email || '— (non communiqué)' }}</b></div>
+            </div>
+          }
 
           <h3>Compte et usage</h3>
           <div class="grid2">
-            <div><span>Statut</span><b>{{ d.status === 'active' ? 'Actif' : 'Inscription en cours' }}</b></div>
+            <div><span>Statut</span><b>{{ d.suspended ? '⏸️ Suspendu' : d.status === 'active' ? 'Actif' : 'Inscription en cours' }}</b></div>
             <div><span>Inscrit le</span><b>{{ d.createdAt | date:'dd/MM/yyyy' }}</b></div>
             <div><span>Abonnement</span><b>{{ d.planLabel }} — {{ d.price }} DH/mois</b></div>
+            <div><span>Valable jusqu’au</span><b>{{ d.plan === 'trial' ? '— (essai)' : d.expired ? '⚠️ Expiré' : (d.planUntil | date:'dd/MM/yyyy') + ' (' + d.daysLeft + ' j)' }}</b></div>
             <div><span>Quota consommé</span><b>{{ d.used }} / {{ d.limit }}</b></div>
             <div><span>Clients enregistrés</span><b>{{ d.clients ?? 0 }}</b></div>
             <div><span>Langue / canal</span><b>{{ langLabel(d.lang) }}{{ d.voice ? ' · vocal' : '' }}</b></div>
@@ -171,6 +266,19 @@ const PLAN_OPTIONS = [
             </tbody>
           </table>
           <p class="hint">Une facture annulée conserve son numéro (pas de trou dans la séquence) mais sort des totaux.</p>
+
+          <h3>Journal des actions</h3>
+          <table class="table mini">
+            <tbody>
+              @for (l of logs(); track $index) {
+                <tr>
+                  <td><small>{{ l.at | date:'dd/MM/yy HH:mm' }}</small></td>
+                  <td><strong>{{ l.action }}</strong></td>
+                  <td><small>{{ l.detail }}</small></td>
+                </tr>
+              } @empty { <tr><td colspan="3" class="empty-td">Aucune action enregistrée</td></tr> }
+            </tbody>
+          </table>
         </div>
       </div>
     }
@@ -210,6 +318,17 @@ const PLAN_OPTIONS = [
     .table.mini td { padding: .45rem .5rem; font-size: .85rem; } .r { text-align: right; }
     tr.cancelled { opacity: .5; text-decoration: line-through; }
     .hint { color: var(--c-text-soft, #6b7280); font-size: .76rem; margin-top: .5rem; }
+    .tag.ko { background: #fde7e5; color: #b3261e; }
+    .soon { color: #b3261e; font-weight: 700; }
+    .inv-panel { margin-bottom: 1rem; }
+    .acts-row { display: flex; gap: .5rem; flex-wrap: wrap; margin: .2rem 0 1rem; }
+    .editform { display: flex; flex-direction: column; gap: .6rem;
+      label { display: block; font-size: .74rem; color: var(--c-text-soft, #6b7280); }
+      input, select, textarea { width: 100%; margin-top: 3px; padding: .5rem .6rem; font-size: .9rem;
+        border: 1.5px solid var(--c-border, #e3e6ee); border-radius: 8px; font-family: inherit; color: #10131c; }
+      .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; }
+      button { align-self: flex-start; margin-top: .3rem; } }
+    @media (max-width: 560px) { .editform .row3 { grid-template-columns: 1fr; } }
   `]
 })
 export class AdminFatoraComponent implements OnInit {
@@ -221,9 +340,19 @@ export class AdminFatoraComponent implements OnInit {
   stats = signal<FatoraStats | null>(null);
   tenants = signal<FatoraTenant[]>([]);
   detail = signal<FatoraTenant | null>(null);
+  logs = signal<AdminLogRow[]>([]);
+  invoices = signal<FatoraInvoice[]>([]);
+  showInvoices = signal(false);
+  editing = signal(false);
   error = signal<string>('');
   q = '';
   planFilter = '';
+  invQ = '';
+  invSort = 'amount';
+  form: EditForm = {
+    companyName: '', ice: '', identFiscal: '', taxePro: '',
+    address: '', email: '', defaultVatRate: 20, adminNote: ''
+  };
 
   private api(path: string) { return `${this.base}/api/admin/fatora${path}`; }
 
@@ -266,8 +395,82 @@ export class AdminFatoraComponent implements OnInit {
   }
 
   open(t: FatoraTenant) {
-    this.http.get<FatoraTenant>(this.api(`/tenants/${t.id}`))
-      .subscribe({ next: (d) => this.detail.set(d), error: () => {} });
+    this.editing.set(false);
+    this.http.get<FatoraTenant>(this.api(`/tenants/${t.id}`)).subscribe({
+      next: (d) => {
+        this.detail.set(d);
+        this.form = {
+          companyName: d.company || '', ice: d.ice || '', identFiscal: d.identFiscal || '',
+          taxePro: d.taxePro || '', address: d.address || '', email: d.email || '',
+          defaultVatRate: d.vat, adminNote: d.note || ''
+        };
+      },
+      error: () => {}
+    });
+    this.http.get<AdminLogRow[]>(this.api(`/tenants/${t.id}/logs`))
+      .subscribe({ next: (l) => this.logs.set(l), error: () => this.logs.set([]) });
+  }
+
+  saveEdit(d: FatoraTenant) {
+    this.http.patch<FatoraTenant>(this.api(`/tenants/${d.id}`), this.form).subscribe({
+      next: () => { this.editing.set(false); this.open(d); this.load(); },
+      error: (e) => this.error.set(e?.error?.error || 'Modification impossible.')
+    });
+  }
+
+  toggleSuspend(d: FatoraTenant) {
+    const next = !d.suspended;
+    const verb = next ? 'Suspendre' : 'Réactiver';
+    if (!confirm(`${verb} le compte de ${d.company || d.phone} ?\nLe client en sera informé sur WhatsApp.`)) return;
+    this.http.post<FatoraTenant>(this.api(`/tenants/${d.id}/suspend`), { suspended: next }).subscribe({
+      next: () => { this.open(d); this.load(); },
+      error: (e) => this.error.set(e?.error?.error || 'Action impossible.')
+    });
+  }
+
+  giveCredit(d: FatoraTenant) {
+    const inv = Number(prompt('Combien de factures offrir ? (0 pour aucune)', '5') || 0);
+    const days = Number(prompt('Combien de jours de validité ajouter ? (0 pour aucun)', '0') || 0);
+    if (!inv && !days) return;
+    this.http.post<FatoraTenant>(this.api(`/tenants/${d.id}/credit`), { invoices: inv, days }).subscribe({
+      next: () => { this.open(d); this.load(); },
+      error: (e) => this.error.set(e?.error?.error || 'Crédit impossible.')
+    });
+  }
+
+  toggleInvoices() {
+    this.showInvoices.set(!this.showInvoices());
+    if (this.showInvoices()) this.loadInvoices();
+  }
+
+  loadInvoices() {
+    const params: string[] = ['limit=60', 'sort=' + this.invSort];
+    if (this.invQ.trim()) params.push('q=' + encodeURIComponent(this.invQ.trim()));
+    this.http.get<FatoraInvoice[]>(this.api('/invoices?' + params.join('&')))
+      .subscribe({ next: (r) => this.invoices.set(r), error: () => {} });
+  }
+
+  setInvoiceStatus(i: FatoraInvoice) {
+    const next = i.status === 'cancelled' ? 'issued' : 'cancelled';
+    if (!confirm(`${next === 'cancelled' ? 'Annuler' : 'Rétablir'} la facture ${i.number} (${i.totalTtc.toLocaleString('fr-FR')} DH) ?`)) return;
+    this.http.patch(this.api(`/invoices/${i.id}/status`), { status: next }).subscribe({
+      next: () => { i.status = next; this.load(); },
+      error: (e) => this.error.set(e?.error?.error || 'Modification impossible.')
+    });
+  }
+
+  exportCsv() {
+    this.http.get(this.api('/export.csv'), { responseType: 'text' }).subscribe({
+      next: (csv) => {
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `fatora-comptes-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.error.set('Export impossible.')
+    });
   }
 
   toggleInvoice(d: FatoraTenant, inv: { id: number; number: string; status: string }) {

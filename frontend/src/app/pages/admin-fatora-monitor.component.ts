@@ -1,5 +1,5 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { API_BASE } from '../core/api-base';
@@ -17,7 +17,7 @@ const REFRESH_MS = 180000; // 3 minutes
 
 @Component({
   selector: 'svq-admin-fatora-monitor',
-  imports: [FormsModule, DatePipe, DecimalPipe],
+  imports: [FormsModule, DatePipe],
   template: `
     <div class="head">
       <h1 class="pg-title">Fatora-Bot — supervision</h1>

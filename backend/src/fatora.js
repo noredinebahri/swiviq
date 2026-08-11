@@ -58,6 +58,51 @@ fatoraRouter.patch('/invoices/:id/status', (req, res) =>
     body: JSON.stringify({ status: req.body?.status })
   }));
 
+fatoraRouter.patch('/tenants/:id', (req, res) =>
+  forward(req, res, `/tenants/${encodeURIComponent(req.params.id)}`, {
+    method: 'PATCH', body: JSON.stringify(req.body || {})
+  }));
+
+fatoraRouter.post('/tenants/:id/suspend', (req, res) =>
+  forward(req, res, `/tenants/${encodeURIComponent(req.params.id)}/suspend`, {
+    method: 'POST', body: JSON.stringify(req.body || {})
+  }));
+
+fatoraRouter.post('/tenants/:id/credit', (req, res) =>
+  forward(req, res, `/tenants/${encodeURIComponent(req.params.id)}/credit`, {
+    method: 'POST', body: JSON.stringify(req.body || {})
+  }));
+
+fatoraRouter.get('/tenants/:id/logs', (req, res) =>
+  forward(req, res, `/tenants/${encodeURIComponent(req.params.id)}/logs`));
+
+fatoraRouter.get('/invoices', (req, res) => {
+  const params = new URLSearchParams();
+  for (const key of ['q', 'sort', 'limit', 'status']) {
+    if (req.query[key]) params.set(key, String(req.query[key]).slice(0, 120));
+  }
+  const qs = params.toString();
+  return forward(req, res, `/invoices${qs ? '?' + qs : ''}`);
+});
+
+// Export CSV : réponse texte, pas JSON — on relaie le flux tel quel
+fatoraRouter.get('/export.csv', async (req, res) => {
+  if (!FATORA_KEY) return res.status(503).json({ error: 'FATORA_ADMIN_KEY absent.' });
+  try {
+    const r = await fetch(`${FATORA_URL}/admin/export.csv`, {
+      headers: { 'X-Admin-Key': FATORA_KEY },
+      signal: AbortSignal.timeout(20000)
+    });
+    const body = await r.text();
+    res.status(r.status)
+      .set('Content-Type', 'text/csv; charset=utf-8')
+      .set('Content-Disposition', r.headers.get('content-disposition') || 'attachment; filename="fatora-comptes.csv"')
+      .send(body);
+  } catch (err) {
+    res.status(502).json({ error: 'Service Fatora-Bot injoignable.', detail: err.message });
+  }
+});
+
 fatoraRouter.get('/health', (req, res) => forward(req, res, '/health'));
 
 fatoraRouter.get('/logs', (req, res) => {
