@@ -24,6 +24,39 @@
 - [TransferVVIP](https://swiviq.com/produits/transfervvip)
 - [SWIVIQ Flow](https://swiviq.com/produits/swiviq-flow)
 
+## Couverture géographique
+
+SWIVIQ n'a qu'un seul établissement, à Rabat, et intervient dans tout le Maroc.
+Les pages ci-dessous décrivent le contexte économique et les modalités
+d'intervention par ville — elles ne correspondent pas à des bureaux locaux.
+La grille tarifaire est nationale et ne varie pas selon la ville.
+
+- [Toutes les villes](https://swiviq.com/agence)
+- [Casablanca](https://swiviq.com/agence/casablanca) — finance, industrie, import-export, distribution
+- [Rabat](https://swiviq.com/agence/rabat) — siège social ; administration, conseil, formation
+- [Marrakech](https://swiviq.com/agence/marrakech) — hôtellerie, réservation en ligne, conciergerie
+- [Tanger](https://swiviq.com/agence/tanger) — industrie, logistique portuaire, zones franches
+- [Fès](https://swiviq.com/agence/fes) — artisanat, agroalimentaire, tourisme culturel
+- [Agadir](https://swiviq.com/agence/agadir) — agriculture, pêche, traçabilité et export
+- [Kénitra](https://swiviq.com/agence/kenitra) — automobile, agro-industrie, PME
+- [Oujda](https://swiviq.com/agence/oujda) — commerce, santé, formation ; projets menés à distance
+
+Chaque ville dispose de trois pages de service : `/agence/[ville]/application-web`,
+`/agence/[ville]/application-mobile` et `/agence/[ville]/site-e-commerce`.
+
+## Guides et analyses
+
+- [Combien coûte une application mobile au Maroc ?](https://swiviq.com/blog/combien-coute-application-mobile-maroc) — 35 000 à 200 000 MAD HT selon la complexité ; détail des postes de coût.
+- [Paiement en ligne au Maroc](https://swiviq.com/blog/paiement-en-ligne-maroc) — CMI, paiement à la livraison, encaissement en devises.
+- [Pourquoi votre site n'apparaît pas sur Google](https://swiviq.com/blog/site-invisible-google-javascript-ssr) — indexation, JavaScript et rendu côté serveur.
+- [Réussir la refonte de son site web](https://swiviq.com/blog/reussir-refonte-site-web-entreprise) — plan de redirection et méthode en 6 étapes.
+
+## Comparatifs
+
+- [E-commerce sur mesure ou Shopify ?](https://swiviq.com/comparatifs/site-sur-mesure-ou-shopify)
+- [Agence ou freelance ?](https://swiviq.com/comparatifs/agence-ou-freelance)
+- [Application native ou web app ?](https://swiviq.com/comparatifs/application-native-ou-web-app)
+
 ## Pages utiles
 
 - [Devis en ligne instantané](https://swiviq.com/devis) : estimation en temps réel avec PDF automatique en 2 minutes.
@@ -36,4 +69,4 @@ SWIVIQ SARL AU — Capital 100 000 MAD — ICE 003963563000019 — IF 73099178 �
 Siège : Imm 30, Appt 8, Rue Moulay Ahmed Loukili, Hassan, Rabat, Maroc.
 Zone d'intervention : Rabat, Casablanca et tout le Maroc.
 
-Dernière mise à jour : 2026-08-04
+Dernière mise à jour : 2026-08-06

@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal, PLATFORM_ID } from '@angular/core';
+import { Component, ElementRef, inject, OnInit, signal, ViewChild, PLATFORM_ID } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -6,11 +6,12 @@ import { TPipe } from '../core/i18n/i18n.service';
 import { SeoService, SITE_URL } from '../core/seo.service';
 import { RevealDirective } from '../shared/reveal.directive';
 import { SceneSpyDirective } from '../shared/scene-spy.directive';
-import { ApiService, Product, Plan } from '../core/api.service';
+import { ApiService, Product, Plan, ProductSection } from '../core/api.service';
+import { ImgFallbackDirective } from '../shared/img-fallback.directive';
 
 @Component({
   selector: 'svq-product-detail',
-  imports: [RouterLink, TPipe, RevealDirective, SceneSpyDirective, CommonModule, FormsModule],
+  imports: [RouterLink, TPipe, RevealDirective, SceneSpyDirective, CommonModule, FormsModule, ImgFallbackDirective],
   template: `
     @if (loading()) {
       <div class="loader section"><span class="spinner"></span></div>
@@ -58,7 +59,7 @@ import { ApiService, Product, Plan } from '../core/api.service';
             </div>
           </div>
           <div class="pdet-hero__art" svqReveal>
-            <img [src]="product().coverUrl" [alt]="product().name" class="pdet-cover" loading="eager" />
+            <img [src]="product().coverUrl" [alt]="product().name" class="pdet-cover" loading="eager" [svqImgFallback]="product().name" [fallbackColor]="brand()" />
             <div class="pdet-cover__glow" aria-hidden="true"></div>
           </div>
         </div>
@@ -92,6 +93,89 @@ import { ApiService, Product, Plan } from '../core/api.service';
           </div>
         </div>
       </section>
+
+      <!-- ============ DOSSIER TECHNIQUE ============ -->
+      @if (sections().length) {
+        <section class="dossier" [style.--foil]="brand()">
+          <div class="container">
+
+            <header class="dossier__head" svqReveal>
+              <span class="dossier__kicker">{{ 'products.deepDive' | t }}</span>
+              <h2>{{ 'products.deepDiveTitle' | t }}</h2>
+            </header>
+
+            <!-- Index : collé sous l'en-tête pendant toute la lecture du
+                 dossier — sans ça, changer de chapitre oblige à remonter. -->
+            <nav class="dossier__index" aria-label="Sommaire" #dossierIndex>
+              @for (s of sections(); track s.title) {
+                <a [href]="'#sec-' + sectionAnchor(s)"
+                   [attr.data-anchor]="sectionAnchor(s)"
+                   [class.on]="activeSection() === sectionAnchor(s)"
+                   (click)="scrollToSection($event, s)">{{ s.eyebrow || s.title }}</a>
+              }
+            </nav>
+
+            @for (s of sections(); track s.title; let i = $index) {
+              <article class="chap" [id]="'sec-' + sectionAnchor(s)"
+                       [svqSceneSpy]="i" (active)="onChapterActive($event)">
+
+                <!-- Colonne de gauche : plaque de repère + chiffres -->
+                <aside class="chap__rail">
+                  <div class="chap__plate">
+                    @if (s.eyebrow) { <span>{{ s.eyebrow }}</span> }
+                  </div>
+                  @if (s.metrics?.length) {
+                    <dl class="chap__stats">
+                      @for (m of s.metrics; track m.label) {
+                        <div>
+                          <dt>{{ m.value }}</dt>
+                          <dd>{{ m.label }}</dd>
+                        </div>
+                      }
+                    </dl>
+                  }
+                </aside>
+
+                <!-- Colonne de droite : le propos -->
+                <div class="chap__main" svqReveal>
+                  <h3>{{ s.title }}</h3>
+
+                  @if (s.body) {
+                    @for (para of paragraphs(s.body); track $index) { <p>{{ para }}</p> }
+                  }
+
+                  <!-- Signature : ce que l'API répond vraiment -->
+                  @if (s.evidence?.length) {
+                    <div class="board" role="table" aria-label="Requêtes et résultats réels">
+                      <div class="board__head" role="row">
+                        <span role="columnheader">Requête</span>
+                        <span role="columnheader">Premier résultat</span>
+                        <span role="columnheader">Source</span>
+                      </div>
+                      @for (e of s.evidence; track e.query) {
+                        <div class="board__row" role="row">
+                          <span class="board__q" role="cell">{{ e.query }}</span>
+                          <span class="board__r" role="cell">
+                            {{ e.result }}
+                            @if (e.code) { <em class="board__code">{{ e.code }}</em> }
+                          </span>
+                          <span class="board__s" role="cell">{{ e.source }}</span>
+                        </div>
+                      }
+                    </div>
+                  }
+
+                  @if (s.bullets?.length) {
+                    <ul class="chap__list">
+                      @for (b of s.bullets; track b) { <li>{{ b }}</li> }
+                    </ul>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        </section>
+      }
 
       <!-- ============ STORY (cinematic gallery) ============ -->
       @if (product().photos.length) {
@@ -131,7 +215,7 @@ import { ApiService, Product, Plan } from '../core/api.service';
                     (active)="activeScene.set($event)"
                   >
                     <figure class="story__media" (click)="openLightbox(i)" [style.--brand]="brand()">
-                      <img [src]="photo.url" [alt]="photo.title || product().name" loading="lazy" />
+                      <img [src]="photo.url" [alt]="photo.title || product().name" loading="lazy" [svqImgFallback]="product().name" [fallbackColor]="brand()" />
                       <span class="story__zoom">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
                       </span>
@@ -420,6 +504,165 @@ import { ApiService, Product, Plan } from '../core/api.service';
     .err { color: var(--c-danger); font-size: .82rem; }
     .success-icon { display: grid; place-items: center; margin-bottom: 1rem; }
     .modal__msg { color: var(--c-text-soft); font-size: .95rem; margin-bottom: 1.5rem; }
+
+    /* ==========================================================
+       DOSSIER TECHNIQUE
+       Registre : signalétique d'aéroport — plaques de repère,
+       codes en chasse fixe, tableau d'affichage. Le produit
+       décrit est le transfert : son vocabulaire fait la forme.
+       ========================================================== */
+    .dossier {
+      --rule: rgba(255,255,255,.10);
+      --dim: #8b94a3;
+      --paper: #e8eaef;
+      --mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+      background: var(--c-ink);
+      color: var(--paper);
+      padding: clamp(4rem, 9vw, 7.5rem) 0;
+    }
+
+    /* ---- En-tête ---- */
+    .dossier__head { max-width: 760px; margin-bottom: clamp(2.5rem, 5vw, 4rem); }
+    .dossier__kicker {
+      display: block; font-family: var(--mono);
+      font-size: .72rem; letter-spacing: .22em; text-transform: uppercase;
+      color: var(--foil); margin-bottom: 1rem;
+    }
+    .dossier__head h2 {
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 4.4vw, 3.1rem); line-height: 1.05;
+      letter-spacing: -.03em; margin: 0; color: #fff;
+    }
+
+    /* ---- Index : collé sous l'en-tête pendant toute la section ---- */
+    .dossier__index {
+      position: sticky; top: var(--header-h); z-index: 20;
+      display: flex; gap: 0 1.6rem;
+      padding: .9rem 0; margin-bottom: clamp(2.5rem, 5vw, 4rem);
+      border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+      /* Fond opaque : le contenu doit passer DESSOUS, pas au travers. */
+      background: var(--c-ink);
+      /* Une seule ligne qui défile : sur mobile, sept libellés empilés
+         mangeraient la moitié de l'écran une fois la barre collée. */
+      flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+      scrollbar-width: none; -ms-overflow-style: none;
+    }
+    .dossier__index::-webkit-scrollbar { display: none; }
+    .dossier__index a {
+      flex: 0 0 auto; white-space: nowrap;
+      font-family: var(--mono); font-size: .74rem; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--dim); text-decoration: none;
+      padding: .35rem 0; transition: color .18s;
+      border-bottom: 1px solid transparent;
+    }
+    .dossier__index a:hover { color: var(--paper); }
+    .dossier__index a.on { color: var(--foil); border-bottom-color: var(--foil); }
+    .dossier__index a:focus-visible { outline: 2px solid var(--foil); outline-offset: 3px; }
+
+    /* ---- Chapitre : rail de repère + propos ---- */
+    .chap {
+      display: grid; grid-template-columns: 260px 1fr; gap: clamp(2rem, 5vw, 4.5rem);
+      padding: clamp(2.5rem, 5vw, 4rem) 0;
+      border-top: 1px solid var(--rule);
+      /* En-tête du site + barre d'index collée : sans cette marge, le titre du
+         chapitre atterrit caché derrière les deux. */
+      scroll-margin-top: calc(var(--header-h) + 4rem);
+    }
+    .chap:first-of-type { border-top: 0; }
+
+    /* Le rail suit la lecture : le repère reste visible pendant tout le
+       chapitre. Décalé sous la barre d'index, elle-même collée. */
+    .chap__rail { position: sticky; top: calc(var(--header-h) + 5rem); align-self: start; }
+
+    .chap__plate {
+      display: inline-block; padding: .5rem .8rem;
+      border: 1px solid var(--foil); border-radius: 3px;
+      font-family: var(--mono); font-size: .7rem; font-weight: 600;
+      letter-spacing: .14em; text-transform: uppercase; color: var(--foil);
+    }
+
+    .chap__stats { margin: 1.8rem 0 0; padding: 0; }
+    .chap__stats > div { padding: .85rem 0; border-top: 1px solid var(--rule); }
+    .chap__stats > div:first-child { border-top: 0; padding-top: 0; }
+    .chap__stats dt {
+      font-family: var(--font-display); font-size: 1.9rem; line-height: 1;
+      font-weight: 700; color: #fff; font-variant-numeric: tabular-nums;
+    }
+    .chap__stats dd {
+      margin: .3rem 0 0; font-size: .78rem; line-height: 1.4; color: var(--dim);
+    }
+
+    /* ---- Propos ---- */
+    /* min-width: 0 est indispensable : un élément de grille ne descend pas
+       sous la largeur de son contenu par défaut, et le tableau d'affichage
+       (min-width 34rem) élargissait alors toute la page sur mobile au lieu de
+       défiler dans son propre cadre. */
+    .chap__main { min-width: 0; }
+    .chap__main h3 {
+      font-family: var(--font-display);
+      font-size: clamp(1.5rem, 2.6vw, 2.05rem); line-height: 1.2;
+      letter-spacing: -.02em; color: #fff; margin: 0 0 1.4rem;
+      max-width: 22ch;
+    }
+    .chap__main p {
+      margin: 0 0 1.15rem; max-width: 68ch;
+      font-size: 1.02rem; line-height: 1.75; color: #b8bfcb;
+    }
+
+    /* ---- Liste : filets et tirets, pas de coches ---- */
+    .chap__list { list-style: none; margin: 2rem 0 0; padding: 0; }
+    .chap__list li {
+      position: relative; padding: .8rem 0 .8rem 1.9rem;
+      border-top: 1px solid var(--rule);
+      font-size: .93rem; line-height: 1.6; color: #c9cfd9;
+    }
+    .chap__list li::before {
+      content: ''; position: absolute; left: 0; top: 1.35rem;
+      width: 12px; height: 1px; background: var(--foil);
+    }
+
+    /* ---- Signature : le tableau d'affichage ---- */
+    .board {
+      margin: 2.2rem 0 0;
+      border: 1px solid var(--rule); border-radius: 4px;
+      background: rgba(255,255,255,.025);
+      overflow-x: auto;
+    }
+    .board__head, .board__row {
+      display: grid; grid-template-columns: 9.5rem 1fr 8.5rem;
+      gap: 1rem; padding: .8rem 1.1rem; align-items: baseline;
+      min-width: 34rem;
+    }
+    .board__head {
+      font-family: var(--mono); font-size: .66rem; letter-spacing: .16em;
+      text-transform: uppercase; color: var(--dim);
+      border-bottom: 1px solid var(--rule);
+    }
+    .board__row { border-top: 1px solid rgba(255,255,255,.055); }
+    .board__row:first-of-type { border-top: 0; }
+    .board__q { font-family: var(--mono); font-size: .88rem; color: var(--foil); }
+    /* La flèche appartient à la ligne, pas au contenu : elle reste hors du texte. */
+    .board__q::after { content: ' \\2192'; color: var(--dim); }
+    .board__r { font-size: .92rem; color: #fff; }
+    .board__code {
+      display: inline-block; margin-left: .5rem; padding: .1rem .4rem;
+      border: 1px solid var(--foil); border-radius: 2px;
+      font-family: var(--mono); font-style: normal; font-size: .7rem;
+      letter-spacing: .08em; color: var(--foil);
+    }
+    .board__s { font-family: var(--mono); font-size: .74rem; color: var(--dim); }
+
+    @media (max-width: 900px) {
+      .chap { grid-template-columns: 1fr; gap: 1.6rem; }
+      .chap__rail { position: static; }
+      .chap__stats { display: flex; flex-wrap: wrap; gap: 0 2.2rem; margin-top: 1.2rem; }
+      .chap__stats > div { border-top: 0; padding: .4rem 0; }
+      .chap__stats dt { font-size: 1.5rem; }
+      .chap__main h3 { max-width: none; }
+      .dossier__index { gap: 0 1.1rem; }
+    }
+
   `],
 })
 export class ProductDetailComponent implements OnInit {
@@ -457,7 +700,15 @@ export class ProductDetailComponent implements OnInit {
     this.loading.set(true); this.notFound.set(false);
     this.api.getProduct(slug).subscribe({
       next: p => { this.product.set(p); this.loading.set(false); this.applySeo(p); },
-      error: () => { this.notFound.set(true); this.loading.set(false); }
+      error: () => {
+        this.notFound.set(true);
+        this.loading.set(false);
+        // Sans cela, un slug supprimé renvoyait un 200 affichant « Produit
+        // introuvable » : un soft 404, que Google traite comme une page
+        // pauvre plutôt que comme une page absente. Le noindex retire ces
+        // URLs de l'index au lieu de les y laisser vides.
+        this.seo.noIndex('Produit introuvable — SWIVIQ');
+      }
     });
   }
 
@@ -484,6 +735,81 @@ export class ProductDetailComponent implements OnInit {
   closeLightbox() { this.lightboxOpen.set(false); }
   prevPhoto() { if (this.lightboxIdx() > 0) this.lightboxIdx.update(i => i - 1); }
   nextPhoto() { if (this.lightboxIdx() < this.product().photos.length - 1) this.lightboxIdx.update(i => i + 1); }
+
+  /* Dossier technique */
+  sections(): ProductSection[] { return this.product().sections || []; }
+
+  /** Ancre du chapitre en cours de lecture, surlignée dans l'index. */
+  activeSection = signal('');
+
+  @ViewChild('dossierIndex') dossierIndex?: ElementRef<HTMLElement>;
+
+  onChapterActive(i: number): void {
+    const s = this.sections()[i];
+    if (!s) return;
+    const anchor = this.sectionAnchor(s);
+    this.activeSection.set(anchor);
+    this.revealInIndex(anchor);
+  }
+
+  /**
+   * Ramène la puce active dans la partie visible de l'index.
+   *
+   * La barre défile horizontalement : au septième chapitre, le libellé
+   * surligné serait hors champ et le repère ne servirait plus à rien. On règle
+   * `scrollLeft` à la main plutôt que d'appeler `scrollIntoView`, qui peut
+   * aussi déplacer la page verticalement.
+   */
+  private revealInIndex(anchor: string): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    const nav = this.dossierIndex?.nativeElement;
+    if (!nav) return;
+    const link = nav.querySelector<HTMLElement>(`[data-anchor="${anchor}"]`);
+    if (!link) return;
+
+    const target = link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2;
+    const max = nav.scrollWidth - nav.clientWidth;
+    if (max <= 0) return; // rien à faire : tout tient déjà à l'écran
+    nav.scrollTo({ left: Math.max(0, Math.min(target, max)), behavior: 'smooth' });
+  }
+
+  /**
+   * Ancre stable d'un chapitre : l'`id` fourni par l'administration s'il
+   * existe, sinon un dérivé du titre. Sans repli, un chapitre saisi sans id
+   * casserait le sommaire.
+   */
+  sectionAnchor(s: ProductSection): string {
+    if (s.id) return s.id;
+    return s.title
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      .slice(0, 40);
+  }
+
+  /**
+   * Défilement vers un chapitre, piloté à la main.
+   *
+   * Le `href="#sec-…"` seul ne suffit pas ici : le routeur est configuré avec
+   * `withViewTransitions()` et `scrollPositionRestoration: 'top'`, si bien
+   * qu'une navigation par fragment repasse par lui et se solde par un retour
+   * en haut de page. On intercepte donc le clic.
+   *
+   * Le `href` est conservé : il garde le lien réel — clic milieu, copie de
+   * l'adresse, navigation sans JavaScript — et le décalage sous l'en-tête fixe
+   * est assuré par `scroll-margin-top` sur les chapitres.
+   */
+  scrollToSection(event: Event, s: ProductSection): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    const target = document.getElementById('sec-' + this.sectionAnchor(s));
+    if (!target) return; // ancre absente : on laisse le navigateur faire au mieux
+    event.preventDefault();
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /** Le corps d'un chapitre est saisi en texte libre : les sauts de ligne font les paragraphes. */
+  paragraphs(body: string): string[] {
+    return body.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  }
 
   /* Story gallery */
   brand() { return this.product().brandColor || '#7435F2'; }

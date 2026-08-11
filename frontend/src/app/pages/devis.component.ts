@@ -93,7 +93,10 @@ type Urgency = 'normal' | 'fast' | 'express';
                 <div class="seg">
                   @for (c of complexities; track c) {
                     <button type="button" [class.on]="complexity() === c" (click)="complexity.set(c)">
-                      <strong>{{ 'devis.c' + cap(c) | t }}</strong>
+                      <strong>
+                        {{ 'devis.c' + cap(c) | t }}
+                        @if (complexityPct(c); as p) { <em class="seg__pct">{{ p }}</em> }
+                      </strong>
                       <small>{{ 'devis.c' + cap(c) + 'D' | t }}</small>
                     </button>
                   }
@@ -103,7 +106,10 @@ type Urgency = 'normal' | 'fast' | 'express';
                 <div class="seg">
                   @for (u of urgencies; track u) {
                     <button type="button" [class.on]="urgency() === u" (click)="urgency.set(u)">
-                      <strong>{{ 'devis.u' + cap(u) | t }}</strong>
+                      <strong>
+                        {{ 'devis.u' + cap(u) | t }}
+                        @if (urgencyPct(u); as p) { <em class="seg__pct">{{ p }}</em> }
+                      </strong>
                       <small>{{ 'devis.u' + cap(u) + 'D' | t }}</small>
                     </button>
                   }
@@ -150,8 +156,25 @@ type Urgency = 'normal' | 'fast' | 'express';
               @if (step() === 4) {
                 <h2>{{ 'devis.summary' | t }}</h2>
                 <ul class="sum">
+                  <!-- Prix catalogue brut : c'est le montant lu sur la carte à
+                       l'étape 1. Les coefficients apparaissent ensuite comme
+                       des lignes distinctes — auparavant ils étaient fondus
+                       dans cette ligne, qui affichait donc un prix sans rapport
+                       avec celui annoncé. -->
                   @for (s of selectedServices(); track s.id) {
-                    <li><span>{{ 'services.items.' + s.id + '.title' | t }}</span><span>{{ adjusted(s.basePrice) | number:'1.0-0' }} MAD</span></li>
+                    <li><span>{{ 'services.items.' + s.id + '.title' | t }}</span><span>{{ s.basePrice | number:'1.0-0' }} MAD</span></li>
+                  }
+                  @if (complexityDelta() !== 0) {
+                    <li class="sum__adj">
+                      <span>{{ 'devis.complexity' | t }} — {{ 'devis.c' + cap(complexity()) | t }} ({{ complexityPct(complexity()) }})</span>
+                      <span>{{ complexityDelta() > 0 ? '+' : '' }}{{ complexityDelta() | number:'1.0-0' }} MAD</span>
+                    </li>
+                  }
+                  @if (urgencyDelta() !== 0) {
+                    <li class="sum__adj">
+                      <span>{{ 'devis.urgency' | t }} — {{ 'devis.u' + cap(urgency()) | t }} ({{ urgencyPct(urgency()) }})</span>
+                      <span>{{ urgencyDelta() > 0 ? '+' : '' }}{{ urgencyDelta() | number:'1.0-0' }} MAD</span>
+                    </li>
                   }
                   @for (o of selectedOptions(); track o.id) {
                     <li><span>{{ o.label }}</span><span>{{ o.price | number }} MAD</span></li>
@@ -247,14 +270,17 @@ type Urgency = 'normal' | 'fast' | 'express';
       transition: .25s; background: #fff;
     }
     .seg button.on { border-color: var(--c-primary); background: var(--grad-brand-soft); }
-    .seg strong { font-size: .95rem; }
+    .seg strong { font-size: .95rem; display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap; }
     .seg small { font-size: .78rem; color: var(--c-text-soft); }
+    .seg__pct { font-style: normal; font-size: .74rem; font-weight: 600; color: var(--c-primary);
+                background: var(--grad-brand-soft); border-radius: 999px; padding: .1rem .45rem; white-space: nowrap; }
 
     .fields { gap: 0 1.2rem; }
     .err { color: var(--c-danger); font-size: .9rem; margin-bottom: 1rem; }
 
     .sum { list-style: none; margin-bottom: 1.4rem; }
     .sum li { display: flex; justify-content: space-between; gap: 1rem; padding: .55rem 0; border-bottom: 1px dashed var(--c-border); font-size: .93rem; }
+    .sum__adj { color: var(--c-text-soft); font-size: .87rem; }
     .totals div { display: flex; justify-content: space-between; padding: .4rem 0; color: var(--c-text-soft); }
     .totals .grand { font-size: 1.15rem; color: var(--c-ink); border-top: 2px solid var(--c-border); margin-top: .4rem; padding-top: .8rem; }
     .totals .grand strong { color: var(--c-primary); }
@@ -302,13 +328,25 @@ export class DevisComponent implements OnInit {
   selectedOptions = computed(() =>
     (this.pricing()?.options ?? []).filter(o => this.options().includes(o.id)));
 
+  /** Somme des prix catalogue, avant tout coefficient — le montant affiché sur les cartes. */
+  servicesBase = computed(() =>
+    this.selectedServices().reduce((sum, s) => sum + s.basePrice, 0));
+
+  cMult = computed(() => this.pricing()?.complexityMultipliers[this.complexity()] ?? 1);
+  uMult = computed(() => this.pricing()?.urgencyMultipliers[this.urgency()] ?? 1);
+
+  // Le sous-total vaut base × cMult × uMult + options. On l'expose ici en
+  // écarts successifs pour que le récapitulatif puisse montrer d'où vient
+  // chaque dirham : base + (base × (c−1)) + (base × c × (u−1)) donne
+  // exactement base × c × u. L'urgence porte sur le montant déjà ajusté par
+  // la complexité, d'où le × cMult dans son écart.
+  complexityDelta = computed(() => this.servicesBase() * (this.cMult() - 1));
+  urgencyDelta = computed(() => this.servicesBase() * this.cMult() * (this.uMult() - 1));
+
   subtotal = computed(() => {
-    const p = this.pricing();
-    if (!p) return 0;
-    const base = this.selectedServices().reduce((sum, s) => sum + s.basePrice, 0);
-    const mult = (p.complexityMultipliers[this.complexity()] ?? 1) * (p.urgencyMultipliers[this.urgency()] ?? 1);
+    if (!this.pricing()) return 0;
     const opts = this.selectedOptions().reduce((sum, o) => sum + o.price, 0);
-    return base * mult + opts;
+    return this.servicesBase() + this.complexityDelta() + this.urgencyDelta() + opts;
   });
   vat = computed(() => this.subtotal() * (this.pricing()?.vatRate ?? 0.2));
   total = computed(() => this.subtotal() + this.vat());
@@ -337,11 +375,24 @@ export class DevisComponent implements OnInit {
 
   cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-  adjusted(base: number): number {
-    const p = this.pricing();
-    if (!p) return base;
-    return base * (p.complexityMultipliers[this.complexity()] ?? 1) * (p.urgencyMultipliers[this.urgency()] ?? 1);
+  /**
+   * Écart d'un coefficient par rapport au tarif catalogue, en pourcentage
+   * signé (« +35 % », « −25 % »), ou chaîne vide quand il vaut 1.
+   *
+   * Affiché sur chaque bouton pour que la majoration soit visible AVANT le
+   * clic : c'est son absence sur la complexité qui rendait le total
+   * incompréhensible, alors que l'urgence, elle, annonçait déjà son taux.
+   * La valeur est dérivée du barème renvoyé par l'API — jamais écrite en dur
+   * dans les traductions, sinon le libellé ment dès qu'un tarif change.
+   */
+  pct(mult: number | undefined): string {
+    if (mult == null || mult === 1) return '';
+    const delta = Math.round((mult - 1) * 100);
+    return `${delta > 0 ? '+' : '−'}${Math.abs(delta)} %`;
   }
+
+  complexityPct(c: Complexity) { return this.pct(this.pricing()?.complexityMultipliers[c]); }
+  urgencyPct(u: Urgency) { return this.pct(this.pricing()?.urgencyMultipliers[u]); }
 
   toggleService(id: string) {
     this.selected.update(list => list.includes(id) ? list.filter(x => x !== id) : [...list, id]);

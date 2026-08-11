@@ -1,10 +1,18 @@
 import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeFr from '@angular/common/locales/fr';
 import { provideRouter, withInMemoryScrolling, withViewTransitions } from '@angular/router';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { provideClientHydration, withEventReplay, withHttpTransferCacheOptions } from '@angular/platform-browser';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth.service';
+
+// Angular n'embarque que « en-US ». Les dates du blog sont formatées avec un
+// locale « fr » explicite (DatePipe), qui échouait en NG02100 faute de ces
+// données. On enregistre le locale sans toucher au LOCALE_ID par défaut :
+// le formatage des nombres reste identique partout ailleurs sur le site.
+registerLocaleData(localeFr);
 
 export const appConfig: ApplicationConfig = {
   providers: [

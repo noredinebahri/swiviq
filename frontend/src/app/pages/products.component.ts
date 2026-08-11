@@ -4,10 +4,11 @@ import { TPipe } from '../core/i18n/i18n.service';
 import { SeoService, SITE_URL } from '../core/seo.service';
 import { RevealDirective } from '../shared/reveal.directive';
 import { ApiService, Product, Plan } from '../core/api.service';
+import { ImgFallbackDirective } from '../shared/img-fallback.directive';
 
 @Component({
   selector: 'svq-products',
-  imports: [RouterLink, TPipe, RevealDirective],
+  imports: [RouterLink, TPipe, RevealDirective, ImgFallbackDirective],
   template: `
     <!-- ============ HERO ============ -->
     <section class="phero section--dark">
@@ -41,7 +42,7 @@ import { ApiService, Product, Plan } from '../core/api.service';
             @for (p of products(); track p.slug; let i = $index) {
               <article class="pcard" [routerLink]="['/produits', p.slug]" svqReveal [class]="'reveal-d' + ((i % 3) + 1)">
                 <div class="pcard__media" [class]="'media--' + p.type">
-                  <img [src]="p.coverUrl" [alt]="p.name" loading="lazy" />
+                  <img [src]="p.coverUrl" [alt]="p.name" loading="lazy" [svqImgFallback]="p.name" [fallbackColor]="p.brandColor || '#7435F2'" />
                   <span class="pcard__type" [class]="'t-' + p.type">{{ typeLabel(p.type) | t }}</span>
                   @if (p.status !== 'live') {
                     <span class="pcard__status" [class]="'s-' + p.status">{{ statusLabel(p.status) | t }}</span>

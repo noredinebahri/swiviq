@@ -7,6 +7,17 @@ export const routes: Routes = [
   { path: 'services/:slug', loadComponent: () => import('./pages/service-detail.component').then(m => m.ServiceDetailComponent) },
   { path: 'produits', loadComponent: () => import('./pages/products.component').then(m => m.ProductsComponent) },
   { path: 'produits/:slug', loadComponent: () => import('./pages/product-detail.component').then(m => m.ProductDetailComponent) },
+  // Pages locales : /agence, /agence/[ville], /agence/[ville]/[service]
+  { path: 'agence', loadComponent: () => import('./pages/cities.components').then(m => m.AgenciesComponent) },
+  { path: 'agence/:city', loadComponent: () => import('./pages/cities.components').then(m => m.CityComponent) },
+  { path: 'agence/:city/:service', loadComponent: () => import('./pages/cities.components').then(m => m.CityServiceComponent) },
+
+  { path: 'blog', loadComponent: () => import('./pages/blog.components').then(m => m.BlogComponent) },
+  { path: 'blog/:slug', loadComponent: () => import('./pages/blog.components').then(m => m.BlogPostComponent) },
+
+  { path: 'comparatifs', loadComponent: () => import('./pages/comparatifs.components').then(m => m.ComparisonsComponent) },
+  { path: 'comparatifs/:slug', loadComponent: () => import('./pages/comparatifs.components').then(m => m.ComparisonComponent) },
+
   { path: 'a-propos', loadComponent: () => import('./pages/about.component').then(m => m.AboutComponent) },
   { path: 'contact', loadComponent: () => import('./pages/contact.component').then(m => m.ContactComponent) },
   { path: 'devis', loadComponent: () => import('./pages/devis.component').then(m => m.DevisComponent) },
@@ -26,6 +37,7 @@ export const routes: Routes = [
       { path: 'produits/nouveau', loadComponent: () => import('./pages/admin.components').then(m => m.AdminProductFormComponent) },
       { path: 'produits/:id', loadComponent: () => import('./pages/admin.components').then(m => m.AdminProductFormComponent) },
       { path: 'abonnés', loadComponent: () => import('./pages/admin.components').then(m => m.AdminSubscribersComponent) },
+      { path: 'fatora', loadComponent: () => import('./pages/admin-fatora.component').then(m => m.AdminFatoraComponent) },
       { path: 'generer', loadComponent: () => import('./pages/admin.components').then(m => m.AdminDocGenComponent) },
       { path: 'parametres', loadComponent: () => import('./pages/admin.components').then(m => m.AdminSettingsComponent) },
     ],

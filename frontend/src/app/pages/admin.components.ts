@@ -8,7 +8,7 @@ import { AuthService } from '../core/auth.service';
 import { ApiService, Invoice, Product, Plan, ProductPhoto, Subscriber, Quote } from '../core/api.service';
 import { ToastService } from '../core/toast.service';
 import { LogoComponent } from '../shared/svg';
-import { environment } from '../../environments/environment';
+import { API_BASE } from '../core/api-base';
 
 /* ===================== LOGIN ===================== */
 @Component({
@@ -80,6 +80,7 @@ export class AdminLoginComponent implements OnInit {
           <a routerLink="/admin/factures" routerLinkActive="on">{{ 'admin.invoices' | t }}</a>
           <a routerLink="/admin/produits" routerLinkActive="on">{{ 'admin.products' | t }}</a>
           <a routerLink="/admin/abonnés" routerLinkActive="on">{{ 'admin.subscribers' | t }}</a>
+          <a routerLink="/admin/fatora" routerLinkActive="on">Fatora-Bot</a>
           <a routerLink="/admin/generer" routerLinkActive="on">{{ 'admin.generateDoc' | t }}</a>
           <a routerLink="/admin/parametres" routerLinkActive="on">{{ 'admin.settings' | t }}</a>
         </nav>
@@ -216,6 +217,7 @@ export class AdminQuotesComponent implements OnInit {
   private auth = inject(AuthService);
   private seo = inject(SeoService);
   private router = inject(Router);
+  private apiBase = inject(API_BASE);
   quotes = signal<Quote[]>([]);
   busy = signal(false);
   statuses = ['new', 'sent', 'accepted', 'rejected'];
@@ -234,7 +236,7 @@ export class AdminQuotesComponent implements OnInit {
   }
 
   pdf(q: Quote) {
-    return `${environment.apiUrl}/api/quotes/${q.id}/pdf?token=${q.publicToken}`;
+    return `${this.apiBase}/api/quotes/${q.id}/pdf?token=${q.publicToken}`;
   }
 
   invoice(q: Quote) {
@@ -293,6 +295,7 @@ export class AdminInvoicesComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
   private seo = inject(SeoService);
+  private apiBase = inject(API_BASE);
   invoices = signal<Invoice[]>([]);
 
   ngOnInit() {
@@ -307,7 +310,7 @@ export class AdminInvoicesComponent implements OnInit {
 
   openPdf(inv: Invoice) {
     // authenticated fetch → blob (PDF endpoint requires JWT)
-    fetch(`${environment.apiUrl}/api/invoices/${inv.id}/pdf`, {
+    fetch(`${this.apiBase}/api/invoices/${inv.id}/pdf`, {
       headers: { Authorization: `Bearer ${this.auth.token()}` },
     })
       .then(r => r.blob())
@@ -608,6 +611,69 @@ export class AdminProductsComponent implements OnInit {
           <button type="button" class="btn btn--ghost btn--sm" (click)="addPhoto()">+ {{ 'admin.addPhoto' | t }}</button>
         </div>
 
+        <!-- Chapitres techniques : texte long, puces et chiffres clés -->
+        <div class="card blk">
+          <h2>Chapitres techniques</h2>
+          <p class="blk-hint">
+            Chaque chapitre devient une section de la fiche publique : architecture, workflow,
+            référencement… Laissez vide si le produit n’en a pas besoin.
+          </p>
+          @for (sec of form.sections; track $index; let i = $index) {
+            <div class="sec-box">
+              <div class="sec-box__head">
+                <span class="sec-box__num">{{ i + 1 }}</span>
+                <div class="sec-box__acts">
+                  <button type="button" (click)="moveSection(i, -1)" [disabled]="i === 0" title="Monter" aria-label="Monter">↑</button>
+                  <button type="button" (click)="moveSection(i, 1)" [disabled]="i === form.sections!.length - 1" title="Descendre" aria-label="Descendre">↓</button>
+                  <button type="button" class="danger" (click)="removeSection(i)" title="Retirer" aria-label="Retirer">×</button>
+                </div>
+              </div>
+              <div class="grid grid-2">
+                <div class="field">
+                  <label>Sur-titre</label>
+                  <input [(ngModel)]="sec.eyebrow" [name]="'se' + i" placeholder="Architecture, Workflow…" />
+                </div>
+                <div class="field">
+                  <label>Ancre (optionnel)</label>
+                  <input [(ngModel)]="sec.id" [name]="'si' + i" placeholder="architecture" />
+                </div>
+              </div>
+              <div class="field">
+                <label>Titre</label>
+                <input [(ngModel)]="sec.title" [name]="'st' + i" required />
+              </div>
+              <div class="field">
+                <label>Texte — une ligne vide sépare deux paragraphes</label>
+                <textarea [(ngModel)]="sec.body" [name]="'sb' + i" rows="6"></textarea>
+              </div>
+
+              <div class="field">
+                <label>Puces</label>
+                @for (b of sec.bullets; track $index; let j = $index) {
+                  <div class="upload-row">
+                    <input [ngModel]="b" (ngModelChange)="sec.bullets[j] = $event" [name]="'sbu' + i + '_' + j" />
+                    <button type="button" class="btn btn--ghost btn--sm" (click)="sec.bullets.splice(j, 1)" aria-label="Retirer la puce">×</button>
+                  </div>
+                }
+                <button type="button" class="btn btn--ghost btn--sm" (click)="sec.bullets.push('')">+ Ajouter une puce</button>
+              </div>
+
+              <div class="field">
+                <label>Chiffres clés</label>
+                @for (m of sec.metrics; track $index; let j = $index) {
+                  <div class="upload-row">
+                    <input [(ngModel)]="m.value" [name]="'smv' + i + '_' + j" placeholder="165" />
+                    <input [(ngModel)]="m.label" [name]="'sml' + i + '_' + j" placeholder="URL au sitemap" />
+                    <button type="button" class="btn btn--ghost btn--sm" (click)="sec.metrics.splice(j, 1)" aria-label="Retirer le chiffre">×</button>
+                  </div>
+                }
+                <button type="button" class="btn btn--ghost btn--sm" (click)="sec.metrics.push({ value: '', label: '' })">+ Ajouter un chiffre</button>
+              </div>
+            </div>
+          }
+          <button type="button" class="btn btn--ghost btn--sm" (click)="addSection()">+ Ajouter un chapitre</button>
+        </div>
+
         @if (form.type === 'saas') {
           <div class="card blk">
             <h2>{{ 'admin.plansTitle' | t }}</h2>
@@ -700,6 +766,26 @@ export class AdminProductsComponent implements OnInit {
     .upload-row input { flex: 1; min-width: 0; }
     .upload-btn { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; flex-shrink: 0; }
     .plan-box { padding: 1rem; background: var(--c-surface); border-radius: var(--radius); margin-bottom: .8rem; }
+
+    /* Chapitres techniques */
+    .blk-hint { margin: -.4rem 0 1rem; font-size: .84rem; line-height: 1.5; color: var(--c-text-soft); }
+    .sec-box {
+      padding: 1.1rem; margin-bottom: .9rem;
+      background: var(--c-surface); border: 1px solid var(--c-line);
+      border-radius: var(--radius);
+    }
+    .sec-box__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .8rem; }
+    .sec-box__num {
+      display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+      background: var(--c-primary); color: #fff; font-size: .78rem; font-weight: 700;
+    }
+    .sec-box__acts { display: flex; gap: .3rem; }
+    .sec-box__acts button {
+      width: 28px; height: 28px; border-radius: 7px; cursor: pointer;
+      border: 1px solid var(--c-line); background: #fff; color: var(--c-text-soft);
+    }
+    .sec-box__acts button:disabled { opacity: .4; cursor: not-allowed; }
+    .sec-box__acts .danger:hover { background: var(--c-danger); border-color: var(--c-danger); color: #fff; }
     .plan-box .grid { gap: .5rem; }
     .chk { display: flex; align-items: center; gap: .5rem; font-size: .9rem; cursor: pointer; }
     .chk input { width: auto; }
@@ -730,7 +816,7 @@ export class AdminProductFormComponent implements OnInit {
   editId: string | null = null;
   slugTouched = false;
 
-  form: Product = { slug: '', type: 'app', name: '', tagline: '', description: '', coverUrl: '', technologies: [], features: [], photos: [], plans: [], status: 'live', order: 0, brandColor: '#7435F2', brandTagline: 'Agence digitale — Développement web, mobile & solutions cloud', brandPrefix: 'SW' };
+  form: Product = { slug: '', type: 'app', name: '', tagline: '', description: '', coverUrl: '', technologies: [], features: [], photos: [], sections: [], plans: [], status: 'live', order: 0, brandColor: '#7435F2', brandTagline: 'Agence digitale — Développement web, mobile & solutions cloud', brandPrefix: 'SW' };
   techStr = '';
   featuresStr = '';
   planFeats: string[] = [];
@@ -771,6 +857,13 @@ export class AdminProductFormComponent implements OnInit {
       this.api.adminProduct(id).subscribe({
         next: p => {
           this.form = p;
+          // Fiches créées avant l'ajout des chapitres : sans ce repli, les
+          // *ngFor du formulaire itèrent sur undefined.
+          this.form.sections ||= [];
+          for (const sec of this.form.sections) {
+            sec.bullets ||= [];
+            sec.metrics ||= [];
+          }
           this.techStr = p.technologies.join(', ');
           this.featuresStr = p.features.join('\n');
           this.planFeats = p.plans.map(pl => (pl.features || []).join('\n'));
@@ -782,6 +875,20 @@ export class AdminProductFormComponent implements OnInit {
     } else {
       this.formReady.set(true);
     }
+  }
+
+  addSection() {
+    (this.form.sections ||= []).push({ eyebrow: '', title: '', body: '', bullets: [], metrics: [] });
+  }
+  removeSection(i: number) { this.form.sections?.splice(i, 1); }
+  /** Déplace un chapitre : l'ordre du tableau est celui de la page publique. */
+  moveSection(i: number, dir: -1 | 1) {
+    const list = this.form.sections;
+    if (!list) return;
+    const j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    const [sec] = list.splice(i, 1);
+    list.splice(j, 0, sec);
   }
 
   addPhoto() { this.form.photos.push({ url: '', title: '', description: '' }); }
@@ -1135,6 +1242,7 @@ export class AdminDocGenComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
   private seo = inject(SeoService);
+  private apiBase = inject(API_BASE);
 
   docType = signal<'quote' | 'invoice' | null>(null);
   selectedProject = signal<Product | null | undefined>(undefined);
@@ -1233,8 +1341,8 @@ export class AdminDocGenComponent implements OnInit {
     if (!doc) return;
     const isQuote = this.docType() === 'quote';
     const url = isQuote
-      ? `${environment.apiUrl}/api/quotes/${doc.id}/pdf`
-      : `${environment.apiUrl}/api/invoices/${doc.id}/pdf`;
+      ? `${this.apiBase}/api/quotes/${doc.id}/pdf`
+      : `${this.apiBase}/api/invoices/${doc.id}/pdf`;
     fetch(url, { headers: { Authorization: `Bearer ${this.auth.token()}` } })
       .then(r => r.blob())
       .then(b => window.open(URL.createObjectURL(b), '_blank'));

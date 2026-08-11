@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { map } from 'rxjs';
-import { environment } from '../../environments/environment';
+import { API_BASE } from './api-base';
 
 export interface PricingService { id: string; label: string; basePrice: number; }
 export interface PricingOption { id: string; label: string; price: number; }
@@ -52,11 +52,25 @@ export interface Plan {
   interval: PlanInterval; tagline?: string; features: string[];
   highlighted?: boolean; ctaLabel?: string;
 }
+/** Chiffre clé mis en avant dans un chapitre. */
+export interface SectionMetric { value: string; label: string; }
+/**
+ * Chapitre technique d'une fiche produit.
+ * `features` ne porte que des puces d'une ligne : les sections servent à
+ * expliquer une architecture, un workflow ou une stratégie, avec du texte
+ * suivi et des chiffres.
+ */
+/** Preuve : ce que renvoie réellement le produit pour une requête donnée. */
+export interface SectionEvidence { query: string; result: string; code?: string; source?: string; }
+export interface ProductSection {
+  id?: string; eyebrow?: string; title: string; body?: string;
+  bullets: string[]; metrics: SectionMetric[]; evidence?: SectionEvidence[];
+}
 export interface Product {
   id?: string; slug: string; type: ProductType; name: string; tagline: string;
   description: string; coverUrl: string; technologies: string[]; features: string[];
   websiteUrl?: string; repoUrl?: string; status: ProductStatus;
-  photos: ProductPhoto[]; order?: number; plans: Plan[];
+  photos: ProductPhoto[]; sections?: ProductSection[]; order?: number; plans: Plan[];
   subscribers?: Subscriber[];
   brandColor?: string; brandTagline?: string; brandPrefix?: string;
 }
@@ -71,7 +85,8 @@ export interface Subscriber {
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
-  readonly base = environment.apiUrl;
+  /** Vide côté navigateur (URLs relatives → même origine), absolue côté SSR. */
+  readonly base = inject(API_BASE);
 
   getPublicSettings() {
     return this.http.get<PublicSettings>(`${this.base}/api/settings/public`);

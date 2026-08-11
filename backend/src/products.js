@@ -24,6 +24,25 @@ const planSchema = z.object({
   ctaLabel: z.string().max(80).optional().default('')
 });
 
+const sectionSchema = z.object({
+  id: z.string().max(60).optional(),
+  eyebrow: z.string().max(80).optional().or(z.literal('')),
+  title: z.string().min(1).max(200),
+  body: z.string().max(4000).optional().or(z.literal('')),
+  bullets: z.array(z.string().max(300)).max(20).default([]),
+  metrics: z.array(z.object({
+    value: z.string().min(1).max(40),
+    label: z.string().min(1).max(120)
+  })).max(6).default([]),
+  /** Preuves : couple requête → résultat, affiché comme un tableau de départs. */
+  evidence: z.array(z.object({
+    query: z.string().min(1).max(80),
+    result: z.string().min(1).max(120),
+    code: z.string().max(12).optional().or(z.literal('')),
+    source: z.string().max(40).optional().or(z.literal(''))
+  })).max(8).default([])
+});
+
 const productSchema = z.object({
   slug: z.string().min(1).max(120).regex(/^[a-z0-9-]+$/),
   type: z.enum(['app', 'website', 'saas']),
@@ -37,6 +56,7 @@ const productSchema = z.object({
   repoUrl: z.string().max(500).optional().or(z.literal('')),
   status: z.enum(['live', 'beta', 'coming-soon']).default('live'),
   photos: z.array(photoSchema).max(20).default([]),
+  sections: z.array(sectionSchema).max(12).default([]),
   plans: z.array(planSchema).max(10).default([]),
   order: z.number().int().min(0).max(99999).default(0),
   brandColor: z.string().min(1).max(20).default('#6C4CF1'),
@@ -170,7 +190,7 @@ adminProductsRouter.post('/', async (req, res, next) => {
         description: data.description, coverUrl: data.coverUrl,
         technologies: data.technologies, features: data.features,
         websiteUrl: data.websiteUrl || '', repoUrl: data.repoUrl || '',
-        status: data.status, photos: data.photos, order: data.order,
+        status: data.status, photos: data.photos, sections: data.sections, order: data.order,
         brandColor: data.brandColor || '#6C4CF1',
         brandTagline: data.brandTagline || 'Agence digitale — Développement web, mobile & solutions cloud',
         brandPrefix: data.brandPrefix || 'SW'
@@ -206,7 +226,7 @@ adminProductsRouter.put('/:id', async (req, res, next) => {
         description: data.description, coverUrl: data.coverUrl,
         technologies: data.technologies, features: data.features,
         websiteUrl: data.websiteUrl || '', repoUrl: data.repoUrl || '',
-        status: data.status, photos: data.photos, order: data.order,
+        status: data.status, photos: data.photos, sections: data.sections, order: data.order,
         brandColor: data.brandColor || '#6C4CF1',
         brandTagline: data.brandTagline || 'Agence digitale — Développement web, mobile & solutions cloud',
         brandPrefix: data.brandPrefix || 'SW'
@@ -280,7 +300,7 @@ function toPublicDTO(p) {
     description: p.description, coverUrl: p.coverUrl,
     technologies: p.technologies || [], features: p.features || [],
     websiteUrl: p.websiteUrl, repoUrl: p.repoUrl, status: p.status,
-    photos: p.photos || [], order: p.order,
+    photos: p.photos || [], sections: p.sections || [], order: p.order,
     brandColor: p.brandColor || '#6C4CF1',
     brandTagline: p.brandTagline || 'Agence digitale — Développement web, mobile & solutions cloud',
     brandPrefix: p.brandPrefix || 'SW',

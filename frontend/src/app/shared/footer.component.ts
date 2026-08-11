@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { TPipe } from '../core/i18n/i18n.service';
 import { LogoComponent } from './svg';
+import { CITIES, CITY_SLUGS } from '../pages/cities.data';
 
 @Component({
   selector: 'svq-footer',
@@ -35,6 +36,8 @@ import { LogoComponent } from './svg';
             <a routerLink="/services/saas">{{ 'services.items.saas.title' | t }}</a>
             <a routerLink="/services/ecommerce">{{ 'services.items.ecommerce.title' | t }}</a>
             <a routerLink="/services/conseil">{{ 'services.items.conseil.title' | t }}</a>
+            <a routerLink="/blog">Blog</a>
+            <a routerLink="/comparatifs">Comparatifs</a>
           </nav>
 
           <div>
@@ -45,6 +48,19 @@ import { LogoComponent } from './svg';
             <a routerLink="/confidentialite">{{ 'footer.privacy' | t }}</a>
           </div>
         </div>
+
+        <!-- Bandeau de villes : c'est le maillage qui rend les 32 pages
+             locales explorables. Sans lien entrant depuis le site, elles
+             resteraient orphelines et le sitemap seul ne suffirait pas à
+             les faire indexer durablement. -->
+        <nav class="ftr__cities" aria-label="Villes">
+          <h4>{{ 'footer.cities' | t }}</h4>
+          <div>
+            @for (c of cities; track c.slug) {
+              <a [routerLink]="['/agence', c.slug]">{{ c.name }}</a>
+            }
+          </div>
+        </nav>
 
         <div class="ftr__bottom">
           <span>© {{ year }} SWIVIQ SARL AU. {{ 'footer.rights' | t }}</span>
@@ -61,6 +77,11 @@ import { LogoComponent } from './svg';
     nav a, div > a { display: block; padding-block: .3rem; font-size: .92rem; transition: color .2s; }
     nav a:hover, div > a:hover { color: var(--c-accent); }
     .ftr__addr { font-size: .88rem; margin-block: .5rem; }
+    .ftr__cities { border-top: 1px solid rgba(255,255,255,.1); padding-top: 1.4rem; margin-bottom: 1.5rem; }
+    .ftr__cities h4 { margin-bottom: .7rem; font-size: .85rem; opacity: .8; }
+    .ftr__cities div { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; }
+    .ftr__cities a { display: inline-block; padding-block: .15rem; font-size: .87rem; transition: color .2s; }
+    .ftr__cities a:hover { color: var(--c-accent); }
     .ftr__bottom {
       border-top: 1px solid rgba(255,255,255,.1); padding-top: 1.5rem;
       display: flex; justify-content: space-between; font-size: .85rem;
@@ -71,4 +92,5 @@ import { LogoComponent } from './svg';
 })
 export class FooterComponent {
   year = new Date().getFullYear();
+  cities = CITY_SLUGS.map(s => ({ slug: s, name: CITIES[s].name }));
 }

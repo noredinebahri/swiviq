@@ -13,6 +13,7 @@ import { chatRouter } from './chat.js';
 import { publicSettingsRouter, adminSettingsRouter } from './settings.js';
 import { publicProductsRouter, adminProductsRouter } from './products.js';
 import { uploadsRouter, UPLOADS_DIR } from './uploads.js';
+import { fatoraRouter } from './fatora.js';
 
 const PORT = Number(process.env.PORT || 4000);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:4200';
@@ -92,6 +93,7 @@ app.use('/api/admin', adminSettingsRouter); // GET/PUT /api/admin/settings
 app.use('/api/products', publicProductsRouter); // public products + subscribe
 app.use('/api/admin/products', adminProductsRouter); // admin CRUD + subscribers
 app.use('/api/admin/uploads', uploadsRouter); // POST image upload (auth)
+app.use('/api/admin/fatora', fatoraRouter); // back-office Fatora-Bot (auth)
 
 // Public static serving of uploaded images
 app.use(
