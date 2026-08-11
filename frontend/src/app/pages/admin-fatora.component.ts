@@ -13,11 +13,13 @@ interface FatoraTenant {
   used: number; limit: number; remaining: number; exhausted: boolean;
   invoices?: number; lastInvoiceAt?: string | null; createdAt: string;
   clients?: number;
-  recent?: { number: string; client: string; date: string; totalTtc: number; items: number }[];
+  clientList?: { id: number; name: string; ice: string | null; invoices: number; since: string }[];
+  recent?: { id: number; number: string; client: string; date: string; totalTtc: number; items: number; status: string }[];
 }
 interface FatoraStats {
   tenants: number; active: number; onboarding: number; trial: number; paying: number;
   exhausted: number; mrr: number; invoices: number; invoicesMonth: number; billedMonth: number;
+  cancelled?: number;
 }
 
 const PLAN_OPTIONS = [
@@ -44,7 +46,7 @@ const PLAN_OPTIONS = [
         <div class="kpi"><b>{{ s.trial }}</b><span>En essai</span></div>
         <div class="kpi" [class.warn]="s.exhausted > 0"><b>{{ s.exhausted }}</b><span>Quota épuisé</span></div>
         <div class="kpi"><b>{{ s.invoicesMonth }}</b><span>Factures ce mois</span></div>
-        <div class="kpi"><b>{{ s.billedMonth | number:'1.0-0' }} DH</b><span>Facturé ce mois</span></div>
+        <div class="kpi"><b>{{ s.billedMonth | number:'1.0-0' }} DH</b><span>Facturé ce mois (hors annulées)</span></div>
       </div>
     }
 
@@ -116,18 +118,37 @@ const PLAN_OPTIONS = [
             <div><span>Inscrit le</span><b>{{ d.createdAt | date:'dd/MM/yyyy' }}</b></div>
             <div><span>Statut</span><b>{{ d.status }}</b></div>
           </div>
+          <h3>Clients enregistrés ({{ d.clients ?? 0 }})</h3>
+          <table class="table mini">
+            <tbody>
+              @for (c of d.clientList || []; track c.id) {
+                <tr>
+                  <td><strong>{{ c.name }}</strong></td>
+                  <td><small>{{ c.ice || '—' }}</small></td>
+                  <td class="r">{{ c.invoices }} facture(s)</td>
+                </tr>
+              } @empty { <tr><td colspan="3" class="empty-td">Aucun client mémorisé</td></tr> }
+            </tbody>
+          </table>
+
           <h3>Dernières factures</h3>
           <table class="table mini">
             <tbody>
               @for (i of d.recent || []; track i.number) {
-                <tr>
+                <tr [class.cancelled]="i.status === 'cancelled'">
                   <td><code>{{ i.number }}</code></td><td>{{ i.client }}</td>
                   <td>{{ i.date | date:'dd/MM/yy' }}</td>
                   <td class="r"><strong>{{ i.totalTtc | number:'1.2-2' }} DH</strong></td>
+                  <td class="r">
+                    <button class="btn btn--ghost btn--sm" (click)="toggleInvoice(d, i)">
+                      {{ i.status === 'cancelled' ? 'Rétablir' : 'Annuler' }}
+                    </button>
+                  </td>
                 </tr>
-              } @empty { <tr><td colspan="4" class="empty-td">Aucune facture</td></tr> }
+              } @empty { <tr><td colspan="5" class="empty-td">Aucune facture</td></tr> }
             </tbody>
           </table>
+          <p class="hint">Une facture annulée conserve son numéro (pas de trou dans la séquence) mais sort des totaux.</p>
         </div>
       </div>
     }
@@ -162,6 +183,8 @@ const PLAN_OPTIONS = [
       > div { background: #f7f8fb; border-radius: 10px; padding: 10px 12px; }
       span { display: block; color: var(--c-text-soft, #6b7280); font-size: .72rem; } }
     .table.mini td { padding: .45rem .5rem; font-size: .85rem; } .r { text-align: right; }
+    tr.cancelled { opacity: .5; text-decoration: line-through; }
+    .hint { color: var(--c-text-soft, #6b7280); font-size: .76rem; margin-top: .5rem; }
   `]
 })
 export class AdminFatoraComponent implements OnInit {
@@ -216,6 +239,16 @@ export class AdminFatoraComponent implements OnInit {
   open(t: FatoraTenant) {
     this.http.get<FatoraTenant>(this.api(`/tenants/${t.id}`))
       .subscribe({ next: (d) => this.detail.set(d), error: () => {} });
+  }
+
+  toggleInvoice(d: FatoraTenant, inv: { id: number; number: string; status: string }) {
+    const next = inv.status === 'cancelled' ? 'issued' : 'cancelled';
+    const verb = next === 'cancelled' ? 'Annuler' : 'Rétablir';
+    if (!confirm(`${verb} la facture ${inv.number} ?`)) return;
+    this.http.patch(this.api(`/invoices/${inv.id}/status`), { status: next }).subscribe({
+      next: () => { inv.status = next; this.load(); },
+      error: (e) => this.error.set(e?.error?.error || 'Modification impossible.')
+    });
   }
 
   askMessage(t: FatoraTenant) {

@@ -51,3 +51,20 @@ fatoraRouter.post('/tenants/:id/message', (req, res) =>
     method: 'POST',
     body: JSON.stringify({ text: req.body?.text })
   }));
+
+fatoraRouter.patch('/invoices/:id/status', (req, res) =>
+  forward(req, res, `/invoices/${encodeURIComponent(req.params.id)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: req.body?.status })
+  }));
+
+fatoraRouter.get('/health', (req, res) => forward(req, res, '/health'));
+
+fatoraRouter.get('/logs', (req, res) => {
+  const params = new URLSearchParams();
+  for (const key of ['limit', 'type', 'q']) {
+    if (req.query[key]) params.set(key, String(req.query[key]).slice(0, 120));
+  }
+  const qs = params.toString();
+  return forward(req, res, `/logs${qs ? '?' + qs : ''}`);
+});

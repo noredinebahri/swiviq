@@ -38,6 +38,7 @@ export const routes: Routes = [
       { path: 'produits/:id', loadComponent: () => import('./pages/admin.components').then(m => m.AdminProductFormComponent) },
       { path: 'abonnés', loadComponent: () => import('./pages/admin.components').then(m => m.AdminSubscribersComponent) },
       { path: 'fatora', loadComponent: () => import('./pages/admin-fatora.component').then(m => m.AdminFatoraComponent) },
+      { path: 'fatora/supervision', loadComponent: () => import('./pages/admin-fatora-monitor.component').then(m => m.AdminFatoraMonitorComponent) },
       { path: 'generer', loadComponent: () => import('./pages/admin.components').then(m => m.AdminDocGenComponent) },
       { path: 'parametres', loadComponent: () => import('./pages/admin.components').then(m => m.AdminSettingsComponent) },
     ],

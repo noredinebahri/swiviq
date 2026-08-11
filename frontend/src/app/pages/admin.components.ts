@@ -59,7 +59,8 @@ export class AdminLoginComponent implements OnInit {
     e.preventDefault();
     this.loading.set(true);
     this.error.set(false);
-    this.api.login(this.email.trim(), this.password).subscribe({
+    // Les espaces collés par un copier-coller ne doivent pas faire échouer la connexion
+    this.api.login(this.email.trim(), this.password.trim()).subscribe({
       next: res => { this.auth.setToken(res.token); this.router.navigateByUrl('/admin'); },
       error: () => { this.error.set(true); this.loading.set(false); },
     });
@@ -80,7 +81,8 @@ export class AdminLoginComponent implements OnInit {
           <a routerLink="/admin/factures" routerLinkActive="on">{{ 'admin.invoices' | t }}</a>
           <a routerLink="/admin/produits" routerLinkActive="on">{{ 'admin.products' | t }}</a>
           <a routerLink="/admin/abonnés" routerLinkActive="on">{{ 'admin.subscribers' | t }}</a>
-          <a routerLink="/admin/fatora" routerLinkActive="on">Fatora-Bot</a>
+          <a routerLink="/admin/fatora" routerLinkActive="on" [routerLinkActiveOptions]="{exact:true}">Fatora-Bot</a>
+          <a routerLink="/admin/fatora/supervision" routerLinkActive="on">Supervision</a>
           <a routerLink="/admin/generer" routerLinkActive="on">{{ 'admin.generateDoc' | t }}</a>
           <a routerLink="/admin/parametres" routerLinkActive="on">{{ 'admin.settings' | t }}</a>
         </nav>
