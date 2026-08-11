@@ -7,6 +7,8 @@ import { SeoService } from '../core/seo.service';
 
 interface FatoraTenant {
   id: number; phone: string; company: string | null; ice: string | null;
+  identFiscal: string | null; taxePro: string | null; address: string | null;
+  email: string | null; vat: number;
   lang: string | null; voice: boolean; status: string;
   hasStamp: boolean; hasLogo: boolean;
   plan: string; planLabel: string; price: number;
@@ -111,12 +113,32 @@ const PLAN_OPTIONS = [
         <div class="sheet" (click)="$event.stopPropagation()">
           <button class="x" (click)="detail.set(null)">×</button>
           <h2>{{ d.company || '(sans nom)' }}</h2>
-          <div class="meta big">+{{ d.phone }} · {{ d.planLabel }} · {{ d.used }}/{{ d.limit }} factures</div>
+          <div class="meta big">
+            +{{ d.phone }} · {{ d.planLabel }} · {{ d.used }}/{{ d.limit }} factures ce mois
+          </div>
+
+          <h3>Identité de l’entreprise</h3>
           <div class="grid2">
+            <div class="full"><span>Raison sociale</span><b>{{ d.company || '— (inscription non terminée)' }}</b></div>
             <div><span>ICE</span><b>{{ d.ice || '—' }}</b></div>
-            <div><span>Clients enregistrés</span><b>{{ d.clients ?? 0 }}</b></div>
+            <div><span>Identifiant fiscal (IF)</span><b>{{ d.identFiscal || '—' }}</b></div>
+            <div><span>Taxe professionnelle</span><b>{{ d.taxePro || '—' }}</b></div>
+            <div><span>TVA par défaut</span><b>{{ d.vat }} %</b></div>
+            <div class="full"><span>Adresse</span><b>{{ d.address || '—' }}</b></div>
+            <div><span>WhatsApp</span><b>+{{ d.phone }}</b></div>
+            <div><span>Email</span><b>{{ d.email || '— (non communiqué)' }}</b></div>
+          </div>
+
+          <h3>Compte et usage</h3>
+          <div class="grid2">
+            <div><span>Statut</span><b>{{ d.status === 'active' ? 'Actif' : 'Inscription en cours' }}</b></div>
             <div><span>Inscrit le</span><b>{{ d.createdAt | date:'dd/MM/yyyy' }}</b></div>
-            <div><span>Statut</span><b>{{ d.status }}</b></div>
+            <div><span>Abonnement</span><b>{{ d.planLabel }} — {{ d.price }} DH/mois</b></div>
+            <div><span>Quota consommé</span><b>{{ d.used }} / {{ d.limit }}</b></div>
+            <div><span>Clients enregistrés</span><b>{{ d.clients ?? 0 }}</b></div>
+            <div><span>Langue / canal</span><b>{{ langLabel(d.lang) }}{{ d.voice ? ' · vocal' : '' }}</b></div>
+            <div><span>Cachet</span><b>{{ d.hasStamp ? 'Enregistré' : 'Absent' }}</b></div>
+            <div><span>Logo</span><b>{{ d.hasLogo ? 'Enregistré' : 'Absent' }}</b></div>
           </div>
           <h3>Clients enregistrés ({{ d.clients ?? 0 }})</h3>
           <table class="table mini">
@@ -181,7 +203,10 @@ const PLAN_OPTIONS = [
     .x { position: absolute; top: 12px; right: 14px; border: 0; background: none; font-size: 1.6rem; cursor: pointer; line-height: 1; }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
       > div { background: #f7f8fb; border-radius: 10px; padding: 10px 12px; }
-      span { display: block; color: var(--c-text-soft, #6b7280); font-size: .72rem; } }
+      > div.full { grid-column: 1 / -1; }
+      span { display: block; color: var(--c-text-soft, #6b7280); font-size: .72rem; margin-bottom: 2px; }
+      b { font-size: .92rem; word-break: break-word; } }
+    @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
     .table.mini td { padding: .45rem .5rem; font-size: .85rem; } .r { text-align: right; }
     tr.cancelled { opacity: .5; text-decoration: line-through; }
     .hint { color: var(--c-text-soft, #6b7280); font-size: .76rem; margin-top: .5rem; }
@@ -221,6 +246,10 @@ export class AdminFatoraComponent implements OnInit {
   }
 
   pct(t: FatoraTenant) { return Math.min(100, Math.round((t.used / Math.max(1, t.limit)) * 100)); }
+
+  langLabel(lang: string | null) {
+    return { fr: 'Français', darija_latin: 'Darija (latin)', darija_arabic: 'Darija (arabe)' }[lang || ''] || 'Non détectée';
+  }
 
   changePlan(t: FatoraTenant, ev: Event) {
     const select = ev.target as HTMLSelectElement;
