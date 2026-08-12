@@ -293,6 +293,33 @@ import { ImgFallbackDirective } from '../shared/img-fallback.directive';
         </section>
       }
 
+      <!-- ============ FAQ ============
+           Le balisage FAQPage n'est autorisé que si les questions sont
+           réellement lisibles sur la page. Ce bloc n'est donc pas décoratif :
+           sans lui, le balisage serait une infraction qui coûterait au site
+           entier son éligibilité aux résultats enrichis. -->
+      @if (product().faq?.length) {
+        <section class="section pdet-faq" id="faq">
+          <div class="container container--narrow">
+            <div class="section-head" svqReveal>
+              <span class="eyebrow">Questions fréquentes</span>
+              <h2>Ce qu'on nous demande avant de choisir {{ product().name }}</h2>
+            </div>
+            <div class="faq-list" svqReveal>
+              @for (item of product().faq; track item.q; let i = $index) {
+                <details class="faq-item" [open]="i === 0">
+                  <summary>
+                    <span>{{ item.q }}</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                  </summary>
+                  <p>{{ item.a }}</p>
+                </details>
+              }
+            </div>
+          </div>
+        </section>
+      }
+
       <!-- ============ SUBSCRIBE MODAL ============ -->
       @if (showSubscribe()) {
         <div class="modal-backdrop" (click)="closeSubscribe()">
@@ -337,6 +364,37 @@ import { ImgFallbackDirective } from '../shared/img-fallback.directive';
   styles: [`
     .loader { display: grid; place-items: center; min-height: 40vh; }
     .mt-2 { margin-top: 1rem; }
+
+    /* FAQ — repliée par défaut sauf la première : la page est déjà longue, et
+       une liste de huit réponses dépliées noierait le bouton d'action. Le
+       texte reste dans le DOM, donc lisible par les moteurs. */
+    /* Même décalage que les chapitres : sans lui, un lien vers #faq place le
+       surtitre sous l'en-tête fixe, qui le recouvre. */
+    .pdet-faq { background: var(--c-surface-2, #f7f8fb); scroll-margin-top: calc(var(--header-h) + 4rem); }
+    .container--narrow { max-width: 820px; }
+    .faq-list { display: grid; gap: .7rem; margin-top: 1.6rem; }
+    .faq-item {
+      background: var(--c-surface, #fff);
+      border: 1px solid var(--c-border, rgba(15,23,42,.09));
+      border-radius: var(--radius-lg, 14px);
+      overflow: hidden;
+    }
+    .faq-item summary {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      padding: 1.05rem 1.25rem; cursor: pointer; list-style: none;
+      font-weight: 650; line-height: 1.4;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary:hover { color: var(--c-primary); }
+    .faq-item summary svg { flex-shrink: 0; transition: transform .18s ease; color: var(--c-text-soft, #64748b); }
+    .faq-item[open] summary svg { transform: rotate(180deg); }
+    .faq-item p {
+      padding: 0 1.25rem 1.25rem;
+      color: var(--c-text-soft, #51607d);
+      line-height: 1.65;
+      margin: 0;
+    }
+    @media (prefers-reduced-motion: reduce) { .faq-item summary svg { transition: none; } }
 
     /* HERO */
     .pdet-hero { position: relative; padding-top: calc(var(--header-h) + 3rem); padding-bottom: 4rem; overflow: hidden; }
@@ -713,15 +771,78 @@ export class ProductDetailComponent implements OnInit {
   }
 
   applySeo(p: Product) {
-    this.seo.apply({
-      title: `${p.name} — ${p.tagline} | SWIVIQ`,
-      description: p.description.slice(0, 160), path: `/produits/${p.slug}`,
-      jsonLd: {
+    const url = `${SITE_URL}/produits/${p.slug}`;
+    const image = p.coverUrl?.startsWith('/') ? SITE_URL + p.coverUrl : p.coverUrl;
+
+    const app: Record<string, unknown> = {
+      '@context': 'https://schema.org',
+      '@type': p.type === 'saas' ? 'SoftwareApplication' : p.type === 'app' ? 'MobileApplication' : 'WebApplication',
+      name: p.name,
+      description: p.seo?.description || p.description,
+      url,
+      image,
+      provider: { '@id': `${SITE_URL}/#organization` },
+      // `featureList` et `applicationCategory` sont ce qui permet à un moteur
+      // de répondre « quel outil fait X » sans avoir à lire toute la page.
+      applicationCategory: p.type === 'saas' ? 'BusinessApplication' : undefined,
+      featureList: p.features?.length ? p.features : undefined,
+      softwareHelp: p.websiteUrl || undefined
+    };
+
+    // Les paliers deviennent une offre agrégée : c'est ce qui fait apparaître
+    // « à partir de 30 MAD » dans un résultat, plutôt qu'un lien nu.
+    const paid = (p.plans || []).filter(pl => Number(pl.price) > 0);
+    if (p.plans?.length) {
+      const prices = p.plans.map(pl => Number(pl.price)).filter(n => Number.isFinite(n));
+      app['offers'] = {
+        '@type': 'AggregateOffer',
+        priceCurrency: p.plans[0].currency || 'MAD',
+        lowPrice: Math.min(...prices),
+        highPrice: Math.max(...prices),
+        offerCount: p.plans.length,
+        offers: p.plans.map(pl => ({
+          '@type': 'Offer',
+          name: pl.name,
+          price: Number(pl.price),
+          priceCurrency: pl.currency || 'MAD',
+          description: pl.tagline || undefined,
+          availability: 'https://schema.org/InStock'
+        }))
+      };
+      // Un essai gratuit à côté de paliers payants : on le dit explicitement,
+      // c'est un critère de sélection courant dans les réponses générées.
+      if (paid.length < p.plans.length) app['isAccessibleForFree'] = false;
+    }
+
+    const blocks: object[] = [app];
+
+    // FAQPage : uniquement si les questions sont AUSSI affichées sur la page.
+    // Un balisage sans contenu visible est une infraction aux règles Google et
+    // fait perdre l'éligibilité aux résultats enrichis du site entier.
+    if (p.faq?.length) {
+      blocks.push({
         '@context': 'https://schema.org',
-        '@type': p.type === 'saas' ? 'SoftwareApplication' : p.type === 'app' ? 'MobileApplication' : 'WebApplication',
-        name: p.name, description: p.description, url: `${SITE_URL}/produits/${p.slug}`,
-        image: p.coverUrl, provider: { '@id': `${SITE_URL}/#organization` }
-      }
+        '@type': 'FAQPage',
+        mainEntity: p.faq.map(item => ({
+          '@type': 'Question',
+          name: item.q,
+          acceptedAnswer: { '@type': 'Answer', text: item.a }
+        }))
+      });
+    }
+
+    this.seo.apply({
+      title: p.seo?.title || `${p.name} — ${p.tagline} | SWIVIQ`,
+      description: p.seo?.description || p.description.slice(0, 160),
+      path: `/produits/${p.slug}`,
+      image,
+      keywords: p.seo?.keywords,
+      breadcrumb: [
+        { name: 'Accueil', path: '/' },
+        { name: 'Produits', path: '/produits' },
+        { name: p.name }
+      ],
+      jsonLd: blocks
     });
   }
 

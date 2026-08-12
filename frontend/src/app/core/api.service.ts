@@ -73,7 +73,13 @@ export interface Product {
   photos: ProductPhoto[]; sections?: ProductSection[]; order?: number; plans: Plan[];
   subscribers?: Subscriber[];
   brandColor?: string; brandTagline?: string; brandPrefix?: string;
+  /** Titre, description et expressions ciblées, propres à la fiche. */
+  seo?: ProductSeo;
+  /** Questions/réponses : bloc visible ET balisage FAQPage. */
+  faq?: ProductFaq[];
 }
+export interface ProductSeo { title?: string; description?: string; keywords?: string[]; }
+export interface ProductFaq { q: string; a: string; }
 export interface Subscriber {
   id: string; number: string; name: string; email: string;
   company?: string; phone?: string; status: 'pending' | 'active' | 'suspended' | 'cancelled';

@@ -1,6 +1,7 @@
 import { Sequelize, DataTypes } from 'sequelize';
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
+import { FATORA_BOT } from './seed/fatora-bot.js';
 
 const DB_HOST = process.env.DB_HOST || '127.0.0.1';
 const DB_PORT = Number(process.env.DB_PORT || 3306);
@@ -92,6 +93,24 @@ export const Product = sequelize.define('Product', {
    * rend comme un chapitre autonome, avec ses chiffres clés.
    */
   sections: { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
+  /**
+   * Référencement propre à la fiche : `{ title, description, keywords[] }`.
+   *
+   * Sans lui, la page se contentait du nom du produit et des 160 premiers
+   * caractères de sa description — un titre qui ne contient aucune des
+   * expressions réellement tapées dans un moteur. Les trois champs sont
+   * facultatifs : une fiche sans bloc `seo` retombe sur l'ancien
+   * comportement.
+   */
+  seo: { type: DataTypes.JSON, allowNull: false, defaultValue: {} },
+  /**
+   * Questions/réponses de la fiche : `[{ q, a }]`.
+   *
+   * Elles alimentent à la fois le bloc visible et le balisage FAQPage. Une
+   * réponse doit se suffire à elle-même : c'est ce qu'un moteur génératif
+   * reprend, sorti de son contexte.
+   */
+  faq: { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
   order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   brandColor: { type: DataTypes.STRING(20), allowNull: false, defaultValue: '#7435F2' },
   brandTagline: { type: DataTypes.STRING(240), allowNull: false, defaultValue: 'Agence digitale — Développement web, mobile & solutions cloud' },
@@ -559,6 +578,37 @@ export const EXAMPLE_PRODUCTS = [
   }
 ];
 
+/**
+ * Sème ou complète la fiche Fatora Bot.
+ *
+ * Elle est créée si elle manque. Si elle existe déjà mais sans chapitres — cas
+ * d'une fiche saisie à la main depuis l'administration — on complète le
+ * contenu éditorial sans écraser ce que quelqu'un aurait rédigé : la condition
+ * porte sur l'absence de contenu, jamais sur un numéro de version.
+ *
+ * Les paliers ne sont créés que s'il n'y en a aucun : les recréer à chaque
+ * démarrage effacerait un tarif ajusté depuis l'administration.
+ */
+async function seedFatoraBot() {
+  const { plans, ...productData } = FATORA_BOT;
+  let product = await Product.findOne({ where: { slug: FATORA_BOT.slug } });
+
+  if (!product) {
+    product = await Product.create(productData);
+    console.log('[db] Seeded Fatora Bot product');
+  } else if (!product.sections?.length && !product.photos?.length) {
+    const { slug, ...content } = productData;
+    await product.update(content);
+    console.log('[db] Backfilled Fatora Bot content');
+  }
+
+  const existingPlans = await Plan.count({ where: { productId: product.id } });
+  if (existingPlans === 0 && plans?.length) {
+    await Plan.bulkCreate(plans.map(p => ({ ...p, productId: product.id })));
+    console.log(`[db] Seeded ${plans.length} Fatora Bot plans`);
+  }
+}
+
 async function seedExampleProducts() {
   const count = await Product.count();
   if (count > 0) {
@@ -594,6 +644,7 @@ async function seedExampleProducts() {
       await tvv.update(content);
       console.log('[db] Backfilled TransferVVIP content (photos, sections, technologies)');
     }
+    await seedFatoraBot();
     return;
   }
   console.log('[db] Seeding example products…');
@@ -612,6 +663,7 @@ async function seedExampleProducts() {
     if (growth) await Subscriber.create({ number: 'SUB-0001', productId: cloud.id, planId: growth.id, name: 'Amine El Idrissi', email: 'amine@techcorp.ma', company: 'TechCorp SARL', phone: '+212661234567', status: 'active' });
     if (starter) await Subscriber.create({ number: 'SUB-0002', productId: cloud.id, planId: starter.id, name: 'Sara Bennani', email: 'sara@startup.io', company: 'Startup.io', phone: '', status: 'pending' });
   }
+  await seedFatoraBot();
   console.log('[db] Example products + subscribers seeded');
 }
 

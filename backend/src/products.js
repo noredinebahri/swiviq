@@ -57,6 +57,16 @@ const productSchema = z.object({
   status: z.enum(['live', 'beta', 'coming-soon']).default('live'),
   photos: z.array(photoSchema).max(20).default([]),
   sections: z.array(sectionSchema).max(12).default([]),
+  /* Référencement et FAQ : facultatifs, préservés tels quels s'ils sont absents. */
+  seo: z.object({
+    title: z.string().max(200).optional(),
+    description: z.string().max(400).optional(),
+    keywords: z.array(z.string().max(120)).max(40).optional()
+  }).optional(),
+  faq: z.array(z.object({
+    q: z.string().min(1).max(300),
+    a: z.string().min(1).max(2000)
+  })).max(20).optional(),
   plans: z.array(planSchema).max(10).default([]),
   order: z.number().int().min(0).max(99999).default(0),
   brandColor: z.string().min(1).max(20).default('#6C4CF1'),
@@ -191,6 +201,7 @@ adminProductsRouter.post('/', async (req, res, next) => {
         technologies: data.technologies, features: data.features,
         websiteUrl: data.websiteUrl || '', repoUrl: data.repoUrl || '',
         status: data.status, photos: data.photos, sections: data.sections, order: data.order,
+        seo: data.seo ?? {}, faq: data.faq ?? [],
         brandColor: data.brandColor || '#6C4CF1',
         brandTagline: data.brandTagline || 'Agence digitale — Développement web, mobile & solutions cloud',
         brandPrefix: data.brandPrefix || 'SW'
@@ -227,6 +238,10 @@ adminProductsRouter.put('/:id', async (req, res, next) => {
         technologies: data.technologies, features: data.features,
         websiteUrl: data.websiteUrl || '', repoUrl: data.repoUrl || '',
         status: data.status, photos: data.photos, sections: data.sections, order: data.order,
+        // Le formulaire d'administration n'expose pas encore ces deux champs.
+        // On conserve donc l'existant quand ils sont absents, au lieu d'effacer
+        // le référencement de la fiche à chaque enregistrement.
+        seo: data.seo ?? product.seo, faq: data.faq ?? product.faq,
         brandColor: data.brandColor || '#6C4CF1',
         brandTagline: data.brandTagline || 'Agence digitale — Développement web, mobile & solutions cloud',
         brandPrefix: data.brandPrefix || 'SW'
@@ -301,6 +316,10 @@ function toPublicDTO(p) {
     technologies: p.technologies || [], features: p.features || [],
     websiteUrl: p.websiteUrl, repoUrl: p.repoUrl, status: p.status,
     photos: p.photos || [], sections: p.sections || [], order: p.order,
+    // Le référencement et la FAQ se rendent côté client : ils doivent sortir
+    // du DTO public, sinon la page retombe sur le titre générique et le bloc
+    // FAQ reste vide — donc pas de balisage FAQPage non plus.
+    seo: p.seo || {}, faq: p.faq || [],
     brandColor: p.brandColor || '#6C4CF1',
     brandTagline: p.brandTagline || 'Agence digitale — Développement web, mobile & solutions cloud',
     brandPrefix: p.brandPrefix || 'SW',

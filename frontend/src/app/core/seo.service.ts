@@ -14,6 +14,15 @@ export interface SeoConfig {
   type?: string;
   jsonLd?: object | object[];
   breadcrumb?: BreadcrumbItem[];
+  /**
+   * Expressions ciblées par la page.
+   *
+   * Google n'en tient plus compte depuis 2009 ; Bing et les moteurs qui
+   * l'alimentent la lisent encore, et la balise coûte un attribut. Elle ne
+   * remplace jamais le fait d'écrire ces expressions dans le texte : c'est là
+   * que le classement se joue.
+   */
+  keywords?: string[];
 }
 
 export const SITE_URL = 'https://swiviq.com';
@@ -77,6 +86,11 @@ export class SeoService {
     this.meta.updateTag({ name: 'twitter:description', content: cfg.description });
     this.meta.updateTag({ name: 'twitter:image', content: image });
     this.meta.updateTag({ name: 'robots', content: 'index, follow, max-image-preview:large' });
+    if (cfg.keywords?.length) {
+      this.meta.updateTag({ name: 'keywords', content: cfg.keywords.join(', ') });
+    } else {
+      this.meta.removeTag('name="keywords"');
+    }
 
     this.setCanonical(url);
 
