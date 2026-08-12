@@ -32,14 +32,27 @@ export const LOCALIZED_PATHS = [
  */
 const LOCALIZED_PATTERNS: RegExp[] = [/^\/produits\/[^/]+$/];
 
+/**
+ * Fiches services traduites, une par une.
+ *
+ * Contrairement aux produits, dont la traduction vit en base et vaut pour
+ * toute la famille d'adresses, chaque service est traduit séparément. Tant
+ * qu'un service n'y figure pas, son adresse anglaise n'existe pas et aucun
+ * lien ni hreflang ne la déclare.
+ */
+export const LOCALIZED_SERVICE_SLUGS: string[] = ['web-app'];
+
 /** Le français reste sans préfixe : les adresses publiées ne bougent pas. */
 export const DEFAULT_LANG: Lang = 'fr';
 
 /** Cette adresse (en français, sans préfixe) a-t-elle des versions traduites ? */
 export function isLocalized(path: string): boolean {
   const clean = normalize(path);
-  return (LOCALIZED_PATHS as readonly string[]).includes(clean)
-    || LOCALIZED_PATTERNS.some(re => re.test(clean));
+  if ((LOCALIZED_PATHS as readonly string[]).includes(clean)) return true;
+  if (LOCALIZED_PATTERNS.some(re => re.test(clean))) return true;
+
+  const service = /^\/services\/([^/]+)$/.exec(clean);
+  return !!service && LOCALIZED_SERVICE_SLUGS.includes(service[1]);
 }
 
 /** Retire un éventuel préfixe de langue pour retrouver l'adresse française. */

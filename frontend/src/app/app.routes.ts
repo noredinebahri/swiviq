@@ -55,6 +55,22 @@ export const routes: Routes = [
     data: { lang: 'ar' },
     loadComponent: () => import('./pages/product-detail.component').then(m => m.ProductDetailComponent)
   },
+  /**
+   * Fiches services traduites. La route accepte n'importe quel slug ; c'est
+   * `LOCALIZED_SERVICE_SLUGS` qui décide lesquelles sont annoncées — au
+   * sitemap, dans les liens et en hreflang. Un slug non traduit atteint donc
+   * la page mais reste invisible pour les moteurs, faute d'être déclaré.
+   */
+  {
+    path: 'en/services/:slug',
+    data: { lang: 'en' },
+    loadComponent: () => import('./pages/service-detail.component').then(m => m.ServiceDetailComponent)
+  },
+  {
+    path: 'ar/services/:slug',
+    data: { lang: 'ar' },
+    loadComponent: () => import('./pages/service-detail.component').then(m => m.ServiceDetailComponent)
+  },
   // Pages locales : /agence, /agence/[ville], /agence/[ville]/[service]
   { path: 'agence', loadComponent: () => import('./pages/cities.components').then(m => m.AgenciesComponent) },
   { path: 'agence/:city', loadComponent: () => import('./pages/cities.components').then(m => m.CityComponent) },

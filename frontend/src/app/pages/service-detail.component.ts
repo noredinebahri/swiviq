@@ -6,6 +6,8 @@ import { SeoService, SITE_URL } from '../core/seo.service';
 import { ServiceIconComponent } from '../shared/svg';
 import { RevealDirective } from '../shared/reveal.directive';
 import { SERVICE_IDS, SERVICE_META, ServiceContent } from './services.data';
+import { localizeService } from './services.i18n';
+import { I18nService } from '../core/i18n/i18n.service';
 import { ApiService, Pricing } from '../core/api.service';
 
 @Component({
@@ -113,6 +115,7 @@ export class ServiceDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private seo = inject(SeoService);
+  private i18n = inject(I18nService);
   private api = inject(ApiService);
 
   id = signal<string>('web-app');
@@ -128,7 +131,9 @@ export class ServiceDetailComponent implements OnInit {
         return;
       }
       this.id.set(slug);
-      const meta = SERVICE_META[slug];
+      // La fiche française sert de base ; la traduction de la langue courante
+      // la recouvre champ par champ. Un service non traduit reste en français.
+      const meta = localizeService(slug, SERVICE_META[slug], this.i18n.lang());
       this.content.set(meta);
 
       const serviceJsonLd = {
@@ -168,8 +173,8 @@ export class ServiceDetailComponent implements OnInit {
         description: meta.seoDescFr,
         path: `/services/${slug}`,
         breadcrumb: [
-          { name: 'Accueil', path: '/' },
-          { name: 'Services', path: '/services' },
+          { name: this.i18n.t('nav.home'), path: '/' },
+          { name: this.i18n.t('nav.services'), path: '/services' },
           { name: meta.h1 },
         ],
         jsonLd: [serviceJsonLd, faqJsonLd],

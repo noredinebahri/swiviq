@@ -4,6 +4,7 @@ import { CITY_SLUGS } from './pages/cities.data';
 import { LOCAL_SERVICE_SLUGS } from './pages/cities.services.data';
 import { ARTICLE_SLUGS } from './pages/blog.data';
 import { COMPARISON_SLUGS } from './pages/comparatifs.data';
+import { LOCALIZED_SERVICE_SLUGS } from './core/i18n/localized-routes';
 
 export const serverRoutes: ServerRoute[] = [
   // Static marketing pages → prerendered at build time (fastest + best SEO)
@@ -61,6 +62,12 @@ export const serverRoutes: ServerRoute[] = [
     { path: `${lang}/contact`, renderMode: RenderMode.Server },
     { path: `${lang}/devis`, renderMode: RenderMode.Server },
     { path: `${lang}/produits`, renderMode: RenderMode.Server },
+    // Fiches services traduites : prérendues, une par slug effectivement traduit.
+    {
+      path: `${lang}/services/:slug`,
+      renderMode: RenderMode.Prerender,
+      getPrerenderParams: async () => LOCALIZED_SERVICE_SLUGS.map(slug => ({ slug })),
+    },
   ] as ServerRoute[]),
 
   // Interactive pages → SSR at request time
