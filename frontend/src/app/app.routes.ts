@@ -7,6 +7,26 @@ export const routes: Routes = [
   { path: 'services/:slug', loadComponent: () => import('./pages/service-detail.component').then(m => m.ServiceDetailComponent) },
   { path: 'produits', loadComponent: () => import('./pages/products.component').then(m => m.ProductsComponent) },
   { path: 'produits/:slug', loadComponent: () => import('./pages/product-detail.component').then(m => m.ProductDetailComponent) },
+  /**
+   * Fiches produits traduites, à leur propre adresse.
+   *
+   * La langue vient de l'URL et non du navigateur : c'est la seule forme que
+   * les moteurs savent indexer. Le reste du site garde sa bascule côté client,
+   * qui ne crée pas d'URL — d'où l'absence de préfixe ailleurs.
+   *
+   * Le français reste sans préfixe pour ne pas casser les adresses déjà
+   * publiées ni les liens entrants.
+   */
+  {
+    path: 'en/produits/:slug',
+    data: { lang: 'en' },
+    loadComponent: () => import('./pages/product-detail.component').then(m => m.ProductDetailComponent)
+  },
+  {
+    path: 'ar/produits/:slug',
+    data: { lang: 'ar' },
+    loadComponent: () => import('./pages/product-detail.component').then(m => m.ProductDetailComponent)
+  },
   // Pages locales : /agence, /agence/[ville], /agence/[ville]/[service]
   { path: 'agence', loadComponent: () => import('./pages/cities.components').then(m => m.AgenciesComponent) },
   { path: 'agence/:city', loadComponent: () => import('./pages/cities.components').then(m => m.CityComponent) },

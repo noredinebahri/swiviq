@@ -11,6 +11,9 @@
  * moteurs IA, qui recoupent, cessent de la citer.
  */
 
+import { FATORA_BOT_EN } from './fatora-bot.en.js';
+import { FATORA_BOT_AR } from './fatora-bot.ar.js';
+
 export const FATORA_BOT = {
   slug: 'fatora-bot',
   type: 'saas',
@@ -434,5 +437,17 @@ export const FATORA_BOT = {
       ],
       highlighted: false, ctaLabel: 'Choisir Entreprise'
     }
-  ]
+  ],
+
+  /**
+   * Versions traduites, servies sur /en/produits/… et /ar/produits/…
+   *
+   * Le français reste le contenu de base : tout champ absent d'une traduction
+   * y retombe. Une traduction partielle donne donc une page en langue mixte,
+   * jamais une page trouée.
+   */
+  translations: {
+    en: FATORA_BOT_EN,
+    ar: FATORA_BOT_AR
+  }
 };

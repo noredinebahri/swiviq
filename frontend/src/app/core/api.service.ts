@@ -77,6 +77,23 @@ export interface Product {
   seo?: ProductSeo;
   /** Questions/réponses : bloc visible ET balisage FAQPage. */
   faq?: ProductFaq[];
+  /** Versions traduites, appliquées par-dessus le français sur /en et /ar. */
+  translations?: Record<string, ProductTranslation>;
+}
+
+/** Ce qu'une langue peut redéfinir. Tout est optionnel : le reste retombe sur le français. */
+export interface ProductTranslation {
+  name?: string;
+  tagline?: string;
+  description?: string;
+  technologies?: string[];
+  features?: string[];
+  photos?: Partial<ProductPhoto>[];
+  sections?: ProductSection[];
+  faq?: ProductFaq[];
+  seo?: ProductSeo;
+  /** Libellés des paliers, indexés par leur nom français — les prix ne bougent pas. */
+  plans?: Record<string, Partial<Plan>>;
 }
 export interface ProductSeo { title?: string; description?: string; keywords?: string[]; }
 export interface ProductFaq { q: string; a: string; }

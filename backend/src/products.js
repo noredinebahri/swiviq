@@ -67,6 +67,10 @@ const productSchema = z.object({
     q: z.string().min(1).max(300),
     a: z.string().min(1).max(2000)
   })).max(20).optional(),
+  /* Traductions : structure libre par langue, validée par l'usage plutôt que
+     par un schéma figé — chaque langue peut redéfinir tout ou partie des
+     champs éditoriaux. */
+  translations: z.record(z.any()).optional(),
   plans: z.array(planSchema).max(10).default([]),
   order: z.number().int().min(0).max(99999).default(0),
   brandColor: z.string().min(1).max(20).default('#6C4CF1'),
@@ -201,7 +205,7 @@ adminProductsRouter.post('/', async (req, res, next) => {
         technologies: data.technologies, features: data.features,
         websiteUrl: data.websiteUrl || '', repoUrl: data.repoUrl || '',
         status: data.status, photos: data.photos, sections: data.sections, order: data.order,
-        seo: data.seo ?? {}, faq: data.faq ?? [],
+        seo: data.seo ?? {}, faq: data.faq ?? [], translations: data.translations ?? {},
         brandColor: data.brandColor || '#6C4CF1',
         brandTagline: data.brandTagline || 'Agence digitale — Développement web, mobile & solutions cloud',
         brandPrefix: data.brandPrefix || 'SW'
@@ -242,6 +246,7 @@ adminProductsRouter.put('/:id', async (req, res, next) => {
         // On conserve donc l'existant quand ils sont absents, au lieu d'effacer
         // le référencement de la fiche à chaque enregistrement.
         seo: data.seo ?? product.seo, faq: data.faq ?? product.faq,
+        translations: data.translations ?? product.translations,
         brandColor: data.brandColor || '#6C4CF1',
         brandTagline: data.brandTagline || 'Agence digitale — Développement web, mobile & solutions cloud',
         brandPrefix: data.brandPrefix || 'SW'
@@ -319,7 +324,7 @@ function toPublicDTO(p) {
     // Le référencement et la FAQ se rendent côté client : ils doivent sortir
     // du DTO public, sinon la page retombe sur le titre générique et le bloc
     // FAQ reste vide — donc pas de balisage FAQPage non plus.
-    seo: p.seo || {}, faq: p.faq || [],
+    seo: p.seo || {}, faq: p.faq || [], translations: p.translations || {},
     brandColor: p.brandColor || '#6C4CF1',
     brandTagline: p.brandTagline || 'Agence digitale — Développement web, mobile & solutions cloud',
     brandPrefix: p.brandPrefix || 'SW',

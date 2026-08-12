@@ -111,6 +111,20 @@ export const Product = sequelize.define('Product', {
    * reprend, sorti de son contexte.
    */
   faq: { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
+  /**
+   * Versions traduites : `{ en: {...}, ar: {...} }`.
+   *
+   * Chaque langue peut redéfinir n'importe quel champ éditorial — nom, accroche,
+   * description, fonctionnalités, légendes de visuels, chapitres, FAQ, bloc SEO
+   * et libellés des paliers. Ce qu'elle ne redéfinit pas retombe sur le
+   * français, de sorte qu'une traduction inachevée dégrade en langue mixte
+   * plutôt qu'en page trouée.
+   *
+   * Les traductions ne servent QUE sur des URLs distinctes (/en/…, /ar/…) :
+   * afficher une autre langue sur la même adresse serait, pour un moteur, un
+   * contenu qui change sans que l'URL change.
+   */
+  translations: { type: DataTypes.JSON, allowNull: false, defaultValue: {} },
   order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   brandColor: { type: DataTypes.STRING(20), allowNull: false, defaultValue: '#7435F2' },
   brandTagline: { type: DataTypes.STRING(240), allowNull: false, defaultValue: 'Agence digitale — Développement web, mobile & solutions cloud' },

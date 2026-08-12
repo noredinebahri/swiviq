@@ -2,7 +2,7 @@ import { Component, ElementRef, inject, OnInit, signal, ViewChild, PLATFORM_ID }
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TPipe } from '../core/i18n/i18n.service';
+import { TPipe, I18nService, Lang } from '../core/i18n/i18n.service';
 import { SeoService, SITE_URL } from '../core/seo.service';
 import { RevealDirective } from '../shared/reveal.directive';
 import { SceneSpyDirective } from '../shared/scene-spy.directive';
@@ -41,6 +41,15 @@ import { ImgFallbackDirective } from '../shared/img-fallback.directive';
                 <span class="chip pdet-status" [class]="'status-' + product().status">{{ statusLabel() | t }}</span>
               }
             </div>
+            <!-- Versions traduites : de vrais liens, pas une bascule.
+                 Un moteur suit un lien ; il n'actionne pas un bouton. -->
+            <nav class="pdet-langs" aria-label="Langue de la fiche">
+              @for (a of altLinks(product().slug); track a.lang) {
+                <a [href]="a.path" [attr.hreflang]="a.lang" [attr.lang]="a.lang"
+                   [class.on]="a.lang === pageLang"
+                   [attr.aria-current]="a.lang === pageLang ? 'true' : null">{{ a.label }}</a>
+              }
+            </nav>
             <h1 svqReveal class="reveal-d1">{{ product().name }}</h1>
             <p svqReveal class="reveal-d2 pdet-hero__tag">{{ product().tagline }}</p>
             <div svqReveal class="reveal-d3 pdet-hero__meta">
@@ -401,6 +410,14 @@ import { ImgFallbackDirective } from '../shared/img-fallback.directive';
     .pdet-hero__bg { position: absolute; inset: 0; background: var(--grad-hero); pointer-events: none; }
     .pdet-hero__in { position: relative; display: grid; grid-template-columns: 1.1fr .9fr; gap: 3rem; align-items: start; }
     .pdet-hero__badges { display: flex; gap: .6rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    /* Sélecteur de langue de la fiche : discret, mais des liens véritables. */
+    .pdet-langs { display: flex; gap: .35rem; margin-bottom: .9rem; flex-wrap: wrap; }
+    .pdet-langs a {
+      padding: .18rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 600;
+      color: var(--c-text-inverse-soft, rgba(255,255,255,.7));
+      border: 1px solid rgba(255,255,255,.18); text-decoration: none;
+    }
+    .pdet-langs a:hover, .pdet-langs a.on { background: rgba(255,255,255,.14); color: #fff; }
     .pdet-badge { background: var(--grad-brand-soft); color: var(--c-primary); border: 1px solid rgba(116,83,242,.2); }
     .pdet-status { background: rgba(245,158,11,.15); color: #b45309; border-color: rgba(245,158,11,.3); }
     .pdet-status.status-coming-soon { background: rgba(116,83,242,.15); color: var(--c-primary); border-color: rgba(116,83,242,.3); }
@@ -729,6 +746,7 @@ export class ProductDetailComponent implements OnInit {
   private seo = inject(SeoService);
   private api = inject(ApiService);
   private platformId = inject(PLATFORM_ID);
+  private i18n = inject(I18nService);
 
   product = signal<Product>({ slug: '', type: 'app', name: '', tagline: '', description: '', coverUrl: '', technologies: [], features: [], photos: [], plans: [], status: 'live', order: 0 });
   loading = signal(true);
@@ -747,17 +765,77 @@ export class ProductDetailComponent implements OnInit {
   subSuccess = signal(false);
   subRef = signal('');
 
+  /**
+   * Langue de la page, lue dans l'URL et non dans le navigateur.
+   *
+   * C'est ce qui permet au rendu serveur de produire directement la bonne
+   * langue : la préférence stockée côté navigateur n'existe pas encore quand
+   * le serveur répond, et un moteur n'en a de toute façon aucune.
+   */
+  readonly pageLang: Lang = (this.route.snapshot.data['lang'] as Lang) ?? 'fr';
+
+  /** Préfixe d'URL de la version courante — vide en français. */
+  private langPrefix(lang: Lang): string {
+    return lang === 'fr' ? '' : `/${lang}`;
+  }
+
   ngOnInit() {
+    // On force la langue de l'interface sans la mémoriser : quelqu'un qui
+    // ouvre un lien arabe ne demande pas que tout le site passe en arabe pour
+    // ses prochaines visites.
+    this.i18n.setLang(this.pageLang, false);
+
     this.route.paramMap.subscribe(params => {
       const slug = params.get('slug') ?? '';
       this.load(slug);
     });
   }
 
+  /**
+   * Applique la traduction de la langue courante par-dessus le contenu
+   * français.
+   *
+   * La fusion est volontairement superficielle et champ par champ : un
+   * chapitre traduit remplace le chapitre français en entier plutôt que de se
+   * mélanger avec lui. Un champ absent de la traduction retombe sur le
+   * français, ce qui donne une page en langue mixte — lisible — au lieu d'une
+   * page trouée.
+   */
+  private localize(p: Product): Product {
+    if (this.pageLang === 'fr') return p;
+    const tr = p.translations?.[this.pageLang];
+    if (!tr) return p;
+
+    const merged: Product = { ...p };
+    for (const champ of ['name', 'tagline', 'description', 'technologies', 'features', 'sections', 'faq', 'seo'] as const) {
+      const valeur = (tr as any)[champ];
+      if (valeur != null) (merged as any)[champ] = valeur;
+    }
+
+    // Les visuels ne changent pas, seules leurs légendes : on garde donc les
+    // URLs françaises et on ne remplace que le texte, position par position.
+    if (Array.isArray(tr.photos)) {
+      merged.photos = p.photos.map((photo, i) => ({ ...photo, ...(tr.photos![i] ?? {}) }));
+    }
+
+    // Les paliers gardent leur prix et leur identifiant — seuls les libellés
+    // se traduisent, sinon l'abonnement pointerait vers un palier inexistant.
+    if (tr.plans) {
+      merged.plans = p.plans.map(plan => {
+        const t = tr.plans![plan.name];
+        return t ? { ...plan, ...t } : plan;
+      });
+    }
+    return merged;
+  }
+
   load(slug: string) {
     this.loading.set(true); this.notFound.set(false);
     this.api.getProduct(slug).subscribe({
-      next: p => { this.product.set(p); this.loading.set(false); this.applySeo(p); },
+      next: raw => {
+        const p = this.localize(raw);
+        this.product.set(p); this.loading.set(false); this.applySeo(p);
+      },
       error: () => {
         this.notFound.set(true);
         this.loading.set(false);
@@ -770,8 +848,18 @@ export class ProductDetailComponent implements OnInit {
     });
   }
 
+  /** Les trois adresses de cette fiche, dans l'ordre de déclaration hreflang. */
+  altLinks(slug: string): { lang: Lang; label: string; path: string }[] {
+    return [
+      { lang: 'fr', label: 'Français', path: `/produits/${slug}` },
+      { lang: 'en', label: 'English', path: `/en/produits/${slug}` },
+      { lang: 'ar', label: 'العربية', path: `/ar/produits/${slug}` }
+    ];
+  }
+
   applySeo(p: Product) {
-    const url = `${SITE_URL}/produits/${p.slug}`;
+    const chemin = `${this.langPrefix(this.pageLang)}/produits/${p.slug}`;
+    const url = SITE_URL + chemin;
     const image = p.coverUrl?.startsWith('/') ? SITE_URL + p.coverUrl : p.coverUrl;
 
     const app: Record<string, unknown> = {
@@ -785,6 +873,9 @@ export class ProductDetailComponent implements OnInit {
       // `featureList` et `applicationCategory` sont ce qui permet à un moteur
       // de répondre « quel outil fait X » sans avoir à lire toute la page.
       applicationCategory: p.type === 'saas' ? 'BusinessApplication' : undefined,
+      // Dit explicitement dans quelle langue est CE document : trois versions
+      // au même contenu sans cette mention se ressemblent trop pour un moteur.
+      inLanguage: this.pageLang,
       featureList: p.features?.length ? p.features : undefined,
       softwareHelp: p.websiteUrl || undefined
     };
@@ -834,12 +925,16 @@ export class ProductDetailComponent implements OnInit {
     this.seo.apply({
       title: p.seo?.title || `${p.name} — ${p.tagline} | SWIVIQ`,
       description: p.seo?.description || p.description.slice(0, 160),
-      path: `/produits/${p.slug}`,
+      path: chemin,
       image,
       keywords: p.seo?.keywords,
+      locale: this.pageLang === 'ar' ? 'ar_MA' : this.pageLang === 'en' ? 'en_US' : 'fr_MA',
+      // Les trois versions se déclarent réciproquement : sans réciprocité,
+      // Google ignore l'ensemble des hreflang de la page.
+      alternates: this.altLinks(p.slug).map(a => ({ lang: a.lang, path: a.path })),
       breadcrumb: [
-        { name: 'Accueil', path: '/' },
-        { name: 'Produits', path: '/produits' },
+        { name: this.i18n.t('nav.home'), path: `${this.langPrefix(this.pageLang)}/` },
+        { name: this.i18n.t('nav.products'), path: '/produits' },
         { name: p.name }
       ],
       jsonLd: blocks

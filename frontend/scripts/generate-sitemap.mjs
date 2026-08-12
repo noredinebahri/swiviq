@@ -45,7 +45,7 @@ const RULES = [
   { test: p => /^\/agence\/[^/]+\/[^/]+$/.test(p), priority: '0.7', changefreq: 'monthly' },
   { test: p => /^\/agence\/[^/]+$/.test(p), priority: '0.7', changefreq: 'monthly' },
   { test: p => /^\/(blog|comparatifs)\/[^/]+$/.test(p), priority: '0.7', changefreq: 'monthly' },
-  { test: p => /^\/produits\/[^/]+$/.test(p), priority: '0.7', changefreq: 'monthly' },
+  { test: p => /^\/(?:[a-z]{2}\/)?produits\/[^/]+$/.test(p), priority: '0.7', changefreq: 'monthly' },
   { test: p => p === '/mentions-legales' || p === '/confidentialite', priority: '0.2', changefreq: 'yearly' },
 ];
 
@@ -81,7 +81,16 @@ async function fetchProductPaths() {
     const products = await res.json();
     return (Array.isArray(products) ? products : [])
       .filter(p => p?.slug)
-      .map(p => `/produits/${p.slug}`);
+      .flatMap(p => {
+        const paths = [`/produits/${p.slug}`];
+        // Une fiche traduite a sa propre adresse : sans elle au sitemap, la
+        // version anglaise ou arabe n'est découverte que par les liens de la
+        // page française, et bien plus tard.
+        for (const lang of Object.keys(p.translations ?? {})) {
+          paths.push(`/${lang}/produits/${p.slug}`);
+        }
+        return paths;
+      });
   } catch (err) {
     console.warn(`[sitemap] produits ignorés (API injoignable : ${err.message})`);
     return [];
