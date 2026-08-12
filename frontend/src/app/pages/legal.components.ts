@@ -1,5 +1,5 @@
 import { Component, inject, OnInit } from '@angular/core';
-import { TPipe } from '../core/i18n/i18n.service';
+import { TPipe, I18nService } from '../core/i18n/i18n.service';
 import { SeoService } from '../core/seo.service';
 
 @Component({
@@ -53,10 +53,11 @@ import { SeoService } from '../core/seo.service';
 })
 export class MentionsComponent implements OnInit {
   private seo = inject(SeoService);
+  private i18n = inject(I18nService);
   ngOnInit() {
     this.seo.apply({
-      title: 'Mentions légales | SWIVIQ',
-      description: 'Mentions légales de SWIVIQ SARL AU — ICE 003963563000019, RC 200173 Rabat, IF 73099178.',
+      title: this.i18n.t('seo.legal.title'),
+      description: this.i18n.t('seo.legal.desc'),
       path: '/mentions-legales',
     });
   }
@@ -110,10 +111,11 @@ export class MentionsComponent implements OnInit {
 })
 export class PrivacyComponent implements OnInit {
   private seo = inject(SeoService);
+  private i18n = inject(I18nService);
   ngOnInit() {
     this.seo.apply({
-      title: 'Politique de confidentialité | SWIVIQ',
-      description: 'Politique de confidentialité de SWIVIQ : collecte, finalités et protection de vos données personnelles (loi 09-08).',
+      title: this.i18n.t('seo.privacy.title'),
+      description: this.i18n.t('seo.privacy.desc'),
       path: '/confidentialite',
     });
   }
@@ -141,5 +143,6 @@ export class PrivacyComponent implements OnInit {
 })
 export class NotFoundComponent implements OnInit {
   private seo = inject(SeoService);
+  private i18n = inject(I18nService);
   ngOnInit() { this.seo.noIndex('404 — SWIVIQ'); }
 }

@@ -1,6 +1,6 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { TPipe } from '../core/i18n/i18n.service';
+import { TPipe, LocaleUrlPipe, I18nService } from '../core/i18n/i18n.service';
 import { SeoService, SITE_URL } from '../core/seo.service';
 import { ServiceIconComponent } from '../shared/svg';
 import { HeroLogo3dComponent } from '../shared/hero-logo-3d.component';
@@ -9,7 +9,7 @@ import { SERVICE_IDS } from './services.data';
 
 @Component({
   selector: 'svq-home',
-  imports: [RouterLink, TPipe, HeroLogo3dComponent, ServiceIconComponent, RevealDirective],
+  imports: [RouterLink, TPipe, HeroLogo3dComponent, ServiceIconComponent, RevealDirective, LocaleUrlPipe],
   template: `
     <!-- ============ HERO ============ -->
     <section class="hero section--dark">
@@ -27,10 +27,10 @@ import { SERVICE_IDS } from './services.data';
           </h1>
           <p svqReveal class="reveal-d2">{{ 'hero.sub' | t }}</p>
           <div class="hero__cta" svqReveal>
-            <a routerLink="/devis" class="btn btn--primary">{{ 'hero.cta1' | t }}
+            <a [routerLink]="'/devis' | localeUrl" class="btn btn--primary">{{ 'hero.cta1' | t }}
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </a>
-            <a routerLink="/services" class="btn btn--ghost">{{ 'hero.cta2' | t }}</a>
+            <a [routerLink]="'/services' | localeUrl" class="btn btn--ghost">{{ 'hero.cta2' | t }}</a>
           </div>
           <div class="hero__stats" svqReveal>
             <div><strong>8</strong><span>{{ 'hero.stat1' | t }}</span></div>
@@ -115,9 +115,9 @@ import { SERVICE_IDS } from './services.data';
           <h2>{{ 'cta.title' | t }}</h2>
           <p>{{ 'cta.sub' | t }}</p>
           <div class="cta-panel__actions">
-            <a routerLink="/devis" class="btn btn--primary">{{ 'cta.btn' | t }}</a>
+            <a [routerLink]="'/devis' | localeUrl" class="btn btn--primary">{{ 'cta.btn' | t }}</a>
             <span>{{ 'cta.or' | t }}</span>
-            <a routerLink="/contact" class="cta-panel__link">{{ 'cta.contact' | t }}</a>
+            <a [routerLink]="'/contact' | localeUrl" class="cta-panel__link">{{ 'cta.contact' | t }}</a>
           </div>
         </div>
       </div>
@@ -194,13 +194,14 @@ import { SERVICE_IDS } from './services.data';
 })
 export class HomeComponent implements OnInit {
   private seo = inject(SeoService);
+  private i18n = inject(I18nService);
   serviceIds = SERVICE_IDS;
 
   ngOnInit() {
     this.seo.apply({
       // Mots-clés en tête (marque encore inconnue = zéro CTR sur le nom seul)
-      title: 'Agence Digitale au Maroc — Création d\'Applications & SaaS | SWIVIQ',
-      description: 'SWIVIQ, agence digitale à Rabat : création d\'applications web et mobiles, solutions SaaS et sites e-commerce partout au Maroc. Devis PDF instantané en 2 minutes, à partir de 8 000 MAD.',
+      title: this.i18n.t('seo.home.title'),
+      description: this.i18n.t('seo.home.desc'),
       path: '/',
       jsonLd: [
         {

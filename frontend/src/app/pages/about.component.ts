@@ -1,6 +1,6 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { TPipe } from '../core/i18n/i18n.service';
+import { TPipe, I18nService } from '../core/i18n/i18n.service';
 import { SeoService } from '../core/seo.service';
 import { RevealDirective } from '../shared/reveal.directive';
 
@@ -84,11 +84,12 @@ import { RevealDirective } from '../shared/reveal.directive';
 })
 export class AboutComponent implements OnInit {
   private seo = inject(SeoService);
+  private i18n = inject(I18nService);
 
   ngOnInit() {
     this.seo.apply({
-      title: 'À Propos — SWIVIQ, Agence de Développement Web & Mobile à Rabat',
-      description: 'SWIVIQ SARL AU, agence digitale immatriculée à Rabat (RC 200173) : applications web et mobiles, SaaS et e-commerce pour les entreprises du Maroc. Découvrez notre méthode.',
+      title: this.i18n.t('seo.about.title'),
+      description: this.i18n.t('seo.about.desc'),
       path: '/a-propos',
       breadcrumb: [
         { name: 'Accueil', path: '/' },

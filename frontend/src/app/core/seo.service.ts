@@ -1,5 +1,7 @@
 import { Injectable, inject, DOCUMENT } from '@angular/core';
 import { Meta, Title } from '@angular/platform-browser';
+import { I18nService } from './i18n/i18n.service';
+import { alternatesFor, isLocalized, localePath, stripLang } from './i18n/localized-routes';
 
 export interface BreadcrumbItem {
   name: string;
@@ -79,8 +81,35 @@ export class SeoService {
   private title = inject(Title);
   private meta = inject(Meta);
   private doc = inject(DOCUMENT);
+  private i18n = inject(I18nService);
 
-  apply(cfg: SeoConfig) {
+  /**
+   * Complète la configuration avec ce qui découle de la langue courante.
+   *
+   * Les pages passent leur adresse FRANÇAISE ; le préfixe, les hreflang et
+   * `og:locale` sont déduits ici. C'est volontaire : dupliquer ce calcul dans
+   * chaque page garantissait qu'une page l'oublie, et une page traduite sans
+   * hreflang est une page en double aux yeux d'un moteur.
+   *
+   * Le résultat est idempotent : une page qui a déjà préfixé son chemin — la
+   * fiche produit, qui connaît sa langue par sa route — n'est pas préfixée
+   * deux fois.
+   */
+  private localize(cfg: SeoConfig): SeoConfig {
+    const lang = this.i18n.lang();
+    const base = stripLang(cfg.path);
+    return {
+      ...cfg,
+      path: localePath(base, lang),
+      locale: cfg.locale ?? (lang === 'ar' ? 'ar_MA' : lang === 'en' ? 'en_US' : 'fr_MA'),
+      // Pas de hreflang sur une page qui n'a pas de version traduite : trois
+      // déclarations pour une seule adresse réelle est un signal invalide.
+      alternates: cfg.alternates ?? (isLocalized(base) ? alternatesFor(base) : undefined),
+    };
+  }
+
+  apply(config: SeoConfig) {
+    const cfg = this.localize(config);
     const url = SITE_URL + cfg.path;
     const image = cfg.image ?? `${SITE_URL}/og-image.png`;
 
@@ -145,11 +174,12 @@ export class SeoService {
     canonical.setAttribute('href', url);
     head.appendChild(canonical);
 
-    // Les hreflang n'existent QUE pour les pages qui ont de vraies adresses par
-    // langue, rendues côté serveur — aujourd'hui les fiches produits. Ailleurs,
-    // la bascule fr/en/ar reste purement navigateur sur une seule URL : y poser
-    // des hreflang serait déclarer trois versions là où le serveur n'en rend
-    // qu'une, signal que Google ignore en bloc quand il le détecte.
+    // Les hreflang n'existent QUE pour les pages listées dans
+    // localized-routes.ts, qui ont de vraies adresses par langue rendues côté
+    // serveur. Sur les autres — blog, comparatifs, fiches services, pages
+    // villes — la bascule fr/en/ar reste purement navigateur sur une seule
+    // URL : y poser des hreflang serait déclarer trois versions là où le
+    // serveur n'en rend qu'une, signal que Google ignore en bloc.
     if (!alternates?.length) return;
 
     for (const alt of alternates) {

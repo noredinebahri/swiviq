@@ -1,12 +1,12 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { TPipe } from '../core/i18n/i18n.service';
+import { TPipe, LocaleUrlPipe } from '../core/i18n/i18n.service';
 import { LogoComponent } from './svg';
 import { CITIES, CITY_SLUGS } from '../pages/cities.data';
 
 @Component({
   selector: 'svq-footer',
-  imports: [RouterLink, TPipe, LogoComponent],
+  imports: [RouterLink, TPipe, LogoComponent, LocaleUrlPipe],
   template: `
     <footer class="ftr on-dark">
       <div class="container">
@@ -23,29 +23,29 @@ import { CITIES, CITY_SLUGS } from '../pages/cities.data';
 
           <nav aria-label="Footer navigation">
             <h4>{{ 'footer.nav' | t }}</h4>
-            <a routerLink="/">{{ 'nav.home' | t }}</a>
-            <a routerLink="/services">{{ 'nav.services' | t }}</a>
-            <a routerLink="/produits">{{ 'nav.products' | t }}</a>
-            <a routerLink="/a-propos">{{ 'nav.about' | t }}</a>
-            <a routerLink="/devis">{{ 'nav.devis' | t }}</a>
+            <a [routerLink]="'/' | localeUrl">{{ 'nav.home' | t }}</a>
+            <a [routerLink]="'/services' | localeUrl">{{ 'nav.services' | t }}</a>
+            <a [routerLink]="'/produits' | localeUrl">{{ 'nav.products' | t }}</a>
+            <a [routerLink]="'/a-propos' | localeUrl">{{ 'nav.about' | t }}</a>
+            <a [routerLink]="'/devis' | localeUrl">{{ 'nav.devis' | t }}</a>
           </nav>
 
           <nav aria-label="Services">
             <h4>{{ 'footer.services' | t }}</h4>
-            <a routerLink="/services/web-app">{{ 'services.items.web-app.title' | t }}</a>
-            <a routerLink="/services/saas">{{ 'services.items.saas.title' | t }}</a>
-            <a routerLink="/services/ecommerce">{{ 'services.items.ecommerce.title' | t }}</a>
-            <a routerLink="/services/conseil">{{ 'services.items.conseil.title' | t }}</a>
-            <a routerLink="/blog">Blog</a>
-            <a routerLink="/comparatifs">Comparatifs</a>
+            <a [routerLink]="'/services/web-app' | localeUrl">{{ 'services.items.web-app.title' | t }}</a>
+            <a [routerLink]="'/services/saas' | localeUrl">{{ 'services.items.saas.title' | t }}</a>
+            <a [routerLink]="'/services/ecommerce' | localeUrl">{{ 'services.items.ecommerce.title' | t }}</a>
+            <a [routerLink]="'/services/conseil' | localeUrl">{{ 'services.items.conseil.title' | t }}</a>
+            <a [routerLink]="'/blog' | localeUrl">Blog</a>
+            <a [routerLink]="'/comparatifs' | localeUrl">Comparatifs</a>
           </nav>
 
           <div>
             <h4>{{ 'footer.contact' | t }}</h4>
             <a href="mailto:contact@swiviq.com">contact&#64;swiviq.com</a>
             <p class="ftr__addr">{{ 'contact.addr' | t }}</p>
-            <a routerLink="/mentions-legales">{{ 'footer.mentions' | t }}</a>
-            <a routerLink="/confidentialite">{{ 'footer.privacy' | t }}</a>
+            <a [routerLink]="'/mentions-legales' | localeUrl">{{ 'footer.mentions' | t }}</a>
+            <a [routerLink]="'/confidentialite' | localeUrl">{{ 'footer.privacy' | t }}</a>
           </div>
         </div>
 

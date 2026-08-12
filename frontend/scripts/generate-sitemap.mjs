@@ -29,8 +29,14 @@ const API_URL = process.env.SITEMAP_API_URL ?? `${SITE_URL}/api/products`;
 const BROWSER_DIR = join(process.cwd(), 'dist', 'frontend', 'browser');
 const OUT = join(BROWSER_DIR, 'sitemap.xml');
 
-/** Routes rendues à la demande : aucun fichier produit au build. */
-const SSR_ROUTES = ['/contact', '/devis', '/produits'];
+/**
+ * Routes rendues à la demande : aucun fichier produit au build.
+ * Les versions traduites de ces mêmes pages sont dans la même situation.
+ */
+const SSR_ROUTES = [
+  '/contact', '/devis', '/produits',
+  ...['en', 'ar'].flatMap(lang => [`/${lang}/contact`, `/${lang}/devis`, `/${lang}/produits`]),
+];
 
 /** Jamais indexé : espace authentifié et page d'erreur. */
 const EXCLUDED = [/^\/admin(\/|$)/, /^\/404$/];

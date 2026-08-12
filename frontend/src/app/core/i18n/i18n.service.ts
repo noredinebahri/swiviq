@@ -3,6 +3,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { FR } from './fr';
 import { EN } from './en';
 import { AR } from './ar';
+import { langOfPath, localePath } from './localized-routes';
 
 export type Lang = 'fr' | 'en' | 'ar';
 
@@ -28,6 +29,21 @@ export class I18nService {
       if (saved && DICTS[saved]) this.setLang(saved, false);
       else this.applyDom(this.lang());
     }
+  }
+
+  /**
+   * Aligne la langue sur l'adresse courante.
+   *
+   * L'URL prime sur la préférence enregistrée : une adresse sans préfixe est
+   * française, et doit le rester même pour un visiteur qui avait choisi
+   * l'arabe. Sans cette règle, deux personnes verraient deux langues à la même
+   * adresse — exactement ce qu'un moteur ne peut pas indexer.
+   *
+   * Rien n'est mémorisé : ouvrir un lien arabe ne signifie pas demander que
+   * tout le site passe en arabe pour les visites suivantes.
+   */
+  setFromUrl(url: string) {
+    this.setLang(langOfPath(url), false);
   }
 
   setLang(lang: Lang, persist = true) {
@@ -61,5 +77,21 @@ export class TPipe implements PipeTransform {
   private i18n = inject(I18nService);
   transform(key: string): string {
     return this.i18n.t(key);
+  }
+}
+
+/**
+ * Adresse d'un lien interne dans la langue courante.
+ *
+ *   <a [routerLink]="'/contact' | localeUrl">
+ *
+ * Retombe sur l'adresse française quand la page n'est pas encore traduite :
+ * un lien qui fonctionne dans la mauvaise langue vaut mieux qu'un 404.
+ */
+@Pipe({ name: 'localeUrl', pure: false })
+export class LocaleUrlPipe implements PipeTransform {
+  private i18n = inject(I18nService);
+  transform(path: string): string {
+    return localePath(path, this.i18n.lang());
   }
 }

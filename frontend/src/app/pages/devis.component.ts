@@ -2,7 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { TPipe } from '../core/i18n/i18n.service';
+import { TPipe, I18nService } from '../core/i18n/i18n.service';
 import { SeoService, SITE_URL } from '../core/seo.service';
 import { RevealDirective } from '../shared/reveal.directive';
 import { ServiceIconComponent } from '../shared/svg';
@@ -304,6 +304,7 @@ type Urgency = 'normal' | 'fast' | 'express';
 })
 export class DevisComponent implements OnInit {
   private seo = inject(SeoService);
+  private i18n = inject(I18nService);
   private api = inject(ApiService);
   private route = inject(ActivatedRoute);
 
@@ -353,8 +354,8 @@ export class DevisComponent implements OnInit {
 
   ngOnInit() {
     this.seo.apply({
-      title: 'Devis en ligne instantané — Application, SaaS, E-commerce | SWIVIQ',
-      description: 'Configurez votre projet digital et obtenez immédiatement un devis PDF détaillé : développement web, mobile, SaaS, e-commerce. Gratuit et sans engagement.',
+      title: this.i18n.t('seo.quote.title'),
+      description: this.i18n.t('seo.quote.desc'),
       path: '/devis',
       jsonLd: {
         '@context': 'https://schema.org',

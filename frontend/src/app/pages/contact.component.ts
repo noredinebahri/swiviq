@@ -1,6 +1,6 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { TPipe } from '../core/i18n/i18n.service';
+import { TPipe, I18nService } from '../core/i18n/i18n.service';
 import { SeoService, SITE_URL } from '../core/seo.service';
 import { RevealDirective } from '../shared/reveal.directive';
 import { ApiService } from '../core/api.service';
@@ -93,6 +93,7 @@ import { ApiService } from '../core/api.service';
 })
 export class ContactComponent implements OnInit {
   private seo = inject(SeoService);
+  private i18n = inject(I18nService);
   private api = inject(ApiService);
 
   model = { name: '', email: '', subject: '', message: '' };
@@ -102,8 +103,8 @@ export class ContactComponent implements OnInit {
 
   ngOnInit() {
     this.seo.apply({
-      title: 'Contact — SWIVIQ Rabat | Parlons de votre projet',
-      description: 'Contactez SWIVIQ pour votre projet d\'application, SaaS ou e-commerce. Réponse sous 24h. Rabat, Maroc — contact@swiviq.com.',
+      title: this.i18n.t('seo.contact.title'),
+      description: this.i18n.t('seo.contact.desc'),
       path: '/contact',
       jsonLd: {
         '@context': 'https://schema.org',

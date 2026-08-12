@@ -1,6 +1,6 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { TPipe } from '../core/i18n/i18n.service';
+import { TPipe, I18nService } from '../core/i18n/i18n.service';
 import { SeoService, SITE_URL } from '../core/seo.service';
 import { RevealDirective } from '../shared/reveal.directive';
 import { ApiService, Product, Plan } from '../core/api.service';
@@ -181,6 +181,7 @@ import { ImgFallbackDirective } from '../shared/img-fallback.directive';
 })
 export class ProductsComponent implements OnInit {
   private seo = inject(SeoService);
+  private i18n = inject(I18nService);
   private api = inject(ApiService);
 
   products = signal<Product[]>([]);
@@ -191,8 +192,8 @@ export class ProductsComponent implements OnInit {
 
   ngOnInit() {
     this.seo.apply({
-      title: 'Nos produits — Applications, sites web & solutions SaaS | SWIVIQ',
-      description: 'Découvrez les produits digitaux édités par SWIVIQ : applications web & mobiles, sites web et plateformes SaaS prêtes à l\'emploi ou personnalisables.',
+      title: this.i18n.t('seo.products.title'),
+      description: this.i18n.t('seo.products.desc'),
       path: '/produits',
       jsonLd: {
         '@context': 'https://schema.org',

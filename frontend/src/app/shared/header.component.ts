@@ -1,24 +1,25 @@
 import { Component, HostListener, inject, signal } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
-import { I18nService, LANGS, TPipe } from '../core/i18n/i18n.service';
+import { RouterLink, RouterLinkActive, Router } from '@angular/router';
+import { I18nService, LANGS, TPipe, LocaleUrlPipe, Lang } from '../core/i18n/i18n.service';
+import { isLocalized, localePath, stripLang } from '../core/i18n/localized-routes';
 import { LogoComponent } from './svg';
 
 @Component({
   selector: 'svq-header',
-  imports: [RouterLink, RouterLinkActive, TPipe, LogoComponent],
+  imports: [RouterLink, RouterLinkActive, TPipe, LogoComponent, LocaleUrlPipe],
   template: `
     <header class="hdr" [class.scrolled]="scrolled()" [class.open]="menuOpen()">
       <div class="container hdr__in">
-        <a routerLink="/" class="hdr__logo" aria-label="SWIVIQ — Accueil" (click)="menuOpen.set(false)">
+        <a [routerLink]="'/' | localeUrl" class="hdr__logo" aria-label="SWIVIQ — Accueil" (click)="menuOpen.set(false)">
           <svq-logo [size]="34" />
         </a>
 
 <nav class="hdr__nav" [class.show]="menuOpen()" aria-label="Navigation principale">
-          <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" (click)="menuOpen.set(false)">{{ 'nav.home' | t }}</a>
-          <a routerLink="/services" routerLinkActive="active" (click)="menuOpen.set(false)">{{ 'nav.services' | t }}</a>
-          <a routerLink="/produits" routerLinkActive="active" (click)="menuOpen.set(false)">{{ 'nav.products' | t }}</a>
-          <a routerLink="/a-propos" routerLinkActive="active" (click)="menuOpen.set(false)">{{ 'nav.about' | t }}</a>
-          <a routerLink="/contact" routerLinkActive="active" (click)="menuOpen.set(false)">{{ 'nav.contact' | t }}</a>
+          <a [routerLink]="'/' | localeUrl" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" (click)="menuOpen.set(false)">{{ 'nav.home' | t }}</a>
+          <a [routerLink]="'/services' | localeUrl" routerLinkActive="active" (click)="menuOpen.set(false)">{{ 'nav.services' | t }}</a>
+          <a [routerLink]="'/produits' | localeUrl" routerLinkActive="active" (click)="menuOpen.set(false)">{{ 'nav.products' | t }}</a>
+          <a [routerLink]="'/a-propos' | localeUrl" routerLinkActive="active" (click)="menuOpen.set(false)">{{ 'nav.about' | t }}</a>
+          <a [routerLink]="'/contact' | localeUrl" routerLinkActive="active" (click)="menuOpen.set(false)">{{ 'nav.contact' | t }}</a>
         </nav>
 
         <div class="hdr__actions">
@@ -35,7 +36,7 @@ import { LogoComponent } from './svg';
               </ul>
             }
           </div>
-          <a routerLink="/devis" class="btn btn--primary btn--sm hdr__cta">{{ 'nav.getQuote' | t }}</a>
+          <a [routerLink]="'/devis' | localeUrl" class="btn btn--primary btn--sm hdr__cta">{{ 'nav.getQuote' | t }}</a>
           <button class="burger" (click)="menuOpen.set(!menuOpen())" aria-label="Menu" [attr.aria-expanded]="menuOpen()">
             <span></span><span></span><span></span>
           </button>
@@ -95,6 +96,7 @@ import { LogoComponent } from './svg';
 })
 export class HeaderComponent {
   i18n = inject(I18nService);
+  private router = inject(Router);
   langs = LANGS;
   scrolled = signal(false);
   menuOpen = signal(false);
@@ -103,8 +105,23 @@ export class HeaderComponent {
   @HostListener('window:scroll')
   onScroll() { this.scrolled.set(window.scrollY > 12); }
 
-  setLang(code: any) {
-    this.i18n.setLang(code);
+  /**
+   * Change de langue.
+   *
+   * Sur une page qui existe dans l'autre langue, on NAVIGUE vers son adresse :
+   * la langue appartient à l'URL, et deux visiteurs à la même adresse doivent
+   * voir la même chose. Ailleurs — blog, comparatifs, fiches services, pages
+   * villes, dont le texte n'est encore qu'en français — la bascule reste
+   * l'ancienne : elle traduit l'habillage sans changer d'adresse, et ces pages
+   * ne déclarent aucun hreflang.
+   */
+  setLang(code: Lang) {
     this.langOpen.set(false);
+    const courant = stripLang(this.router.url);
+    if (isLocalized(courant)) {
+      this.router.navigateByUrl(localePath(courant, code));
+      return;
+    }
+    this.i18n.setLang(code);
   }
 }

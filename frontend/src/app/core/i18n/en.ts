@@ -1,4 +1,34 @@
 export const EN = {
+  seo: {
+    home: {
+      title: 'Software Agency in Morocco — Web, Mobile & SaaS Development | SWIVIQ',
+      desc: 'SWIVIQ is a software agency in Rabat building web and mobile applications, SaaS platforms and e-commerce sites across Morocco. Instant PDF quote in two minutes, from 8,000 MAD.',
+    },
+    about: {
+      title: 'About SWIVIQ — Web & Mobile Development Agency in Rabat, Morocco',
+      desc: 'SWIVIQ SARL AU is a registered Moroccan software company in Rabat (RC 200173) building web and mobile apps, SaaS and e-commerce for businesses across Morocco. How we work.',
+    },
+    contact: {
+      title: 'Contact SWIVIQ, Rabat — Let\'s talk about your project',
+      desc: 'Get in touch about your application, SaaS or e-commerce project. We answer within 24 hours. Rabat, Morocco — contact@swiviq.com.',
+    },
+    quote: {
+      title: 'Instant Online Quote — Web App, SaaS, E-commerce | SWIVIQ',
+      desc: 'Configure your project and get a detailed PDF quote immediately: web and mobile development, SaaS platforms, e-commerce. Free, with no commitment.',
+    },
+    products: {
+      title: 'Our Products — Applications, Websites & SaaS Platforms | SWIVIQ',
+      desc: 'The digital products built and published by SWIVIQ: web and mobile applications, websites and SaaS platforms, ready to use or tailored to your business.',
+    },
+    legal: {
+      title: 'Legal Notice | SWIVIQ',
+      desc: 'Legal notice for SWIVIQ SARL AU — ICE 003963563000019, RC 200173 Rabat, IF 73099178.',
+    },
+    privacy: {
+      title: 'Privacy Policy | SWIVIQ',
+      desc: 'How SWIVIQ collects, uses and protects your personal data, under Moroccan law 09-08.',
+    },
+  },
   nav: {
     home: 'Home', services: 'Services', products: 'Products', about: 'About',
     devis: 'Online quote', contact: 'Contact', getQuote: 'Get a quote',

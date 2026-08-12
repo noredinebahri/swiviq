@@ -1,4 +1,34 @@
 export const FR = {
+  seo: {
+    home: {
+      title: 'Agence Digitale au Maroc — Création d\'Applications & SaaS | SWIVIQ',
+      desc: 'SWIVIQ, agence digitale à Rabat : création d\'applications web et mobiles, solutions SaaS et sites e-commerce partout au Maroc. Devis PDF instantané en 2 minutes, à partir de 8 000 MAD.',
+    },
+    about: {
+      title: 'À Propos — SWIVIQ, Agence de Développement Web & Mobile à Rabat',
+      desc: 'SWIVIQ SARL AU, agence digitale immatriculée à Rabat (RC 200173) : applications web et mobiles, SaaS et e-commerce pour les entreprises du Maroc. Découvrez notre méthode.',
+    },
+    contact: {
+      title: 'Contact — SWIVIQ Rabat | Parlons de votre projet',
+      desc: 'Contactez SWIVIQ pour votre projet d\'application, SaaS ou e-commerce. Réponse sous 24h. Rabat, Maroc — contact@swiviq.com.',
+    },
+    quote: {
+      title: 'Devis en ligne instantané — Application, SaaS, E-commerce | SWIVIQ',
+      desc: 'Configurez votre projet digital et obtenez immédiatement un devis PDF détaillé : développement web, mobile, SaaS, e-commerce. Gratuit et sans engagement.',
+    },
+    products: {
+      title: 'Nos produits — Applications, sites web & solutions SaaS | SWIVIQ',
+      desc: 'Découvrez les produits digitaux édités par SWIVIQ : applications web & mobiles, sites web et plateformes SaaS prêtes à l\'emploi ou personnalisables.',
+    },
+    legal: {
+      title: 'Mentions légales | SWIVIQ',
+      desc: 'Mentions légales de SWIVIQ SARL AU — ICE 003963563000019, RC 200173 Rabat, IF 73099178.',
+    },
+    privacy: {
+      title: 'Politique de confidentialité | SWIVIQ',
+      desc: 'Politique de confidentialité de SWIVIQ : collecte, finalités et protection de vos données personnelles (loi 09-08).',
+    },
+  },
   nav: {
     home: 'Accueil', services: 'Services', products: 'Produits', about: 'À propos',
     devis: 'Devis en ligne', contact: 'Contact', getQuote: 'Obtenir un devis',

@@ -47,6 +47,22 @@ export const serverRoutes: ServerRoute[] = [
     getPrerenderParams: async () => COMPARISON_SLUGS.map(slug => ({ slug })),
   },
 
+  // Pages traduites : prérendues comme leurs équivalentes françaises, pour que
+  // le contenu anglais et arabe soit servi tel quel dès la première requête.
+  // Les deux langues sont écrites en dur ici : `getPrerenderParams` ne
+  // s'applique qu'aux segments de route paramétrés, ce que le préfixe n'est pas.
+  ...['en', 'ar'].flatMap(lang => [
+    { path: lang, renderMode: RenderMode.Prerender },
+    { path: `${lang}/a-propos`, renderMode: RenderMode.Prerender },
+    { path: `${lang}/mentions-legales`, renderMode: RenderMode.Prerender },
+    { path: `${lang}/confidentialite`, renderMode: RenderMode.Prerender },
+    // Contact, devis et la liste des produits restent rendus à la demande,
+    // comme leurs versions françaises : formulaires et données de l'API.
+    { path: `${lang}/contact`, renderMode: RenderMode.Server },
+    { path: `${lang}/devis`, renderMode: RenderMode.Server },
+    { path: `${lang}/produits`, renderMode: RenderMode.Server },
+  ] as ServerRoute[]),
+
   // Interactive pages → SSR at request time
   { path: 'contact', renderMode: RenderMode.Server },
   { path: 'devis', renderMode: RenderMode.Server },

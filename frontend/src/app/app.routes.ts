@@ -1,5 +1,33 @@
-import { Routes } from '@angular/router';
+import { Routes, Route } from '@angular/router';
 import { adminGuard } from './core/auth.service';
+
+/**
+ * Pages disponibles en trois langues, à trois adresses.
+ *
+ * Leur contenu vient entièrement des dictionnaires fr/en/ar : les traduire
+ * revient à les servir sous `/en` et `/ar`. Les pages dont le texte est écrit
+ * en français dans le code — services, blog, comparatifs, villes — n'y sont
+ * PAS : les préfixer produirait des pages à l'habillage traduit et au corps
+ * français, ce qu'un moteur classe comme contenu de mauvaise qualité.
+ */
+const PAGES_TRADUITES: { path: string; load: Route['loadComponent'] }[] = [
+  { path: '', load: () => import('./pages/home.component').then(m => m.HomeComponent) },
+  { path: 'a-propos', load: () => import('./pages/about.component').then(m => m.AboutComponent) },
+  { path: 'contact', load: () => import('./pages/contact.component').then(m => m.ContactComponent) },
+  { path: 'devis', load: () => import('./pages/devis.component').then(m => m.DevisComponent) },
+  { path: 'produits', load: () => import('./pages/products.component').then(m => m.ProductsComponent) },
+  { path: 'mentions-legales', load: () => import('./pages/legal.components').then(m => m.MentionsComponent) },
+  { path: 'confidentialite', load: () => import('./pages/legal.components').then(m => m.PrivacyComponent) },
+];
+
+/** Décline les pages ci-dessus sous `/en/...` et `/ar/...`. */
+const routesTraduites: Routes = (['en', 'ar'] as const).flatMap(lang =>
+  PAGES_TRADUITES.map(p => ({
+    path: p.path ? `${lang}/${p.path}` : lang,
+    data: { lang },
+    loadComponent: p.load,
+  }))
+);
 
 export const routes: Routes = [
   { path: '', loadComponent: () => import('./pages/home.component').then(m => m.HomeComponent) },
@@ -63,6 +91,11 @@ export const routes: Routes = [
       { path: 'parametres', loadComponent: () => import('./pages/admin.components').then(m => m.AdminSettingsComponent) },
     ],
   },
+
+  // Déclarées après les routes nommées, avant le fourre-tout : `/en` ne doit
+  // pas être avalé par `**`, mais ne doit pas non plus masquer `/en/produits/:slug`
+  // qui est déclarée plus haut avec sa propre logique de traduction.
+  ...routesTraduites,
 
   { path: '404', loadComponent: () => import('./pages/legal.components').then(m => m.NotFoundComponent) },
   { path: '**', loadComponent: () => import('./pages/legal.components').then(m => m.NotFoundComponent) },
