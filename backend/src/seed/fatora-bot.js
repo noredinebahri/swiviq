@@ -27,7 +27,9 @@ export const FATORA_BOT = {
     + "hésitations et corrections en cours de phrase comprises —, une isolation étanche des données par entreprise, et un site public de "
     + "41 pages en quatre langues. Fatora Bot est conçu, hébergé et maintenu par SWIVIQ.",
 
-  coverUrl: '/products/fatora-cover.jpg',
+  // La couverture montre le produit en usage — une conversation WhatsApp —
+  // et non la page d'accueil du site qui le vend.
+  coverUrl: '/products/fatora-whatsapp.jpg',
 
   technologies: [
     'WhatsApp Business Cloud API (Meta)', 'Node.js', 'Express', 'MySQL', 'Sequelize',
@@ -153,42 +155,42 @@ export const FATORA_BOT = {
 
   photos: [
     {
-      url: '/products/fatora-cover.jpg',
-      title: 'Une conversation, pas un formulaire',
-      description: "La page d'accueil montre ce que vit réellement un utilisateur : une note vocale de sept secondes, la compréhension du bot "
-        + "affichée en arabe, et le PDF émis dans la foulée. Trois chiffres tiennent lieu de promesse — 30 secondes du vocal au PDF, "
-        + "3 langues comprises, conformité ICE/TVA."
+      url: '/products/fatora-whatsapp.jpg',
+      title: 'Toute l’interface tient dans une conversation',
+      description: "Une note vocale de sept secondes part du vendeur. Le bot répond en darija — à l'écrit et en audio — avec ce qu'il a "
+        + "compris : le client, les trois articles, le total TTC de 5 400 dirhams, et une question de contrôle. Un mot suffit à valider, "
+        + "et la facture arrive dans le fil, cachet compris. Il n'y a pas d'écran de saisie ailleurs : ceci est le produit entier."
+    },
+    {
+      url: '/products/fatora-facture.jpg',
+      title: 'Le document réellement émis',
+      description: "Cette facture est produite par le moteur du produit, pas dessinée pour la démonstration. Elle porte l'ICE, l'identifiant "
+        + "fiscal et la taxe professionnelle de l'entreprise, le détail des lignes, la TVA par taux, les totaux hors taxes et TTC, et le "
+        + "montant arrêté en toutes lettres — « Six mille trois cent soixante dirhams TTC ». L'emplacement du cachet est réservé en bas à droite."
+    },
+    {
+      url: '/products/fatora-demos.jpg',
+      title: 'Six capacités, démontrées plutôt qu’énumérées',
+      description: "Dictée vocale, facture conforme, cachet de l'entreprise, remise par QR code, trois langues et mémoire des clients : "
+        + "chaque capacité rejoue son propre scénario, ici la composition de la facture ligne par ligne jusqu'au total en toutes lettres."
+    },
+    {
+      url: '/products/fatora-gestes.jpg',
+      title: 'Trois gestes, zéro formation',
+      description: "Dicter, valider d'un mot, transmettre. Le bot résume à la voix avant d'émettre — articles, prix, total TTC — et un simple "
+        + "« wakha » déclenche l'émission. C'est le parcours complet d'une facture, et il n'y a rien d'autre à apprendre."
+    },
+    {
+      url: '/products/fatora-langues.jpg',
+      title: 'La langue de celui qui facture',
+      description: "Darija en lettres arabes ou latines, français, tamazight : le bot répond toujours dans la langue reçue, et en audio quand "
+        + "on lui parle en audio. Les prix dictés en riyal ou en melyoun sont convertis sans que personne y pense."
     },
     {
       url: '/products/fatora-tarifs.jpg',
       title: 'Un coût indexé sur le volume, pas sur les postes',
       description: "Deux factures offertes pour évaluer, puis 30, 50 ou 90 DH par mois selon le nombre de factures émises. Aucun coût par "
         + "utilisateur : une entreprise qui équipe cinq vendeurs paie le même prix qu'une qui en équipe un."
-    },
-    {
-      url: '/products/fatora-guide-dgi.jpg',
-      title: 'Un pôle éditorial qui répond avant de vendre',
-      description: "Dix-sept guides expliquent l'obligation d'e-facturation, les mentions obligatoires, les taux de TVA, la numérotation ou "
-        + "l'archivage. Ils répondent aux questions que se pose un dirigeant avant même de chercher un outil — et c'est par là que "
-        + "les moteurs, classiques comme génératifs, entrent dans le site."
-    },
-    {
-      url: '/products/fatora-guides.jpg',
-      title: 'Quarante-et-une pages indexables',
-      description: "Guides, comparatifs et pages sectorielles sont prérendus côté serveur : le contenu est lisible dès la première requête, "
-        + "sans exécution de JavaScript. Le sitemap et les fichiers destinés aux moteurs IA sont régénérés à chaque publication."
-    },
-    {
-      url: '/products/fatora-secteurs.jpg',
-      title: 'Une page par métier',
-      description: "BTP et menuiserie, commerce de détail, transport et logistique : chaque secteur a sa page, avec ses exemples de factures "
-        + "et son vocabulaire. Un menuisier ne cherche pas « solution de facturation » — il cherche comment facturer trois portes."
-    },
-    {
-      url: '/products/fatora-arabe.jpg',
-      title: 'Le site en arabe, pas seulement le bot',
-      description: "L'intégralité du site existe en arabe, en français, en anglais et en espagnol, avec une mise en page inversée pour "
-        + "l'arabe. Douze guides sont rédigés en arabe — pas traduits automatiquement."
     }
   ],
 
