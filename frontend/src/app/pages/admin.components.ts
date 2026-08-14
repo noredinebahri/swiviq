@@ -1,4 +1,5 @@
 import { Component, computed, inject, OnInit, signal, ChangeDetectorRef } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { DatePipe, DecimalPipe, CommonModule } from '@angular/common';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -124,47 +125,313 @@ export class AdminLayoutComponent {
 }
 
 /* ===================== DASHBOARD ===================== */
+interface FatoraStatsLite {
+  tenants: number; paying: number; mrr: number; trial: number;
+  exhausted: number; expiringSoon?: number; expired?: number; suspended?: number;
+  invoicesMonth: number; billedMonth: number; cancelled?: number;
+}
+
+/**
+ * Poste de pilotage — remplace la grille de sept compteurs qui laissait
+ * l'écran d'accueil aux trois quarts vide. Tout est cliquable : un chiffre
+ * mène toujours à l'écran qui permet d'agir dessus.
+ */
 @Component({
   selector: 'svq-admin-dashboard',
-  imports: [DecimalPipe, TPipe],
+  imports: [DecimalPipe, DatePipe, RouterLink],
   template: `
-    <h1 class="pg-title">{{ 'admin.dashboard' | t }}</h1>
-    <div class="grid grid-4 kpis">
-      <div class="card kpi"><span>{{ 'admin.totalQuotes' | t }}</span><strong>{{ quotes().length }}</strong></div>
-      <div class="card kpi"><span>{{ 'admin.newQuotes' | t }}</span><strong>{{ newCount() }}</strong></div>
-      <div class="card kpi"><span>{{ 'admin.totalInvoices' | t }}</span><strong>{{ invoices().length }}</strong></div>
-      <div class="card kpi"><span>{{ 'admin.revenue' | t }}</span><strong>{{ revenue() | number:'1.0-0' }} <small>MAD</small></strong></div>
-      <div class="card kpi"><span>{{ 'admin.totalProducts' | t }}</span><strong>{{ products().length }}</strong></div>
-      <div class="card kpi"><span>{{ 'admin.totalSubscribers' | t }}</span><strong>{{ subscribers().length }}</strong></div>
-      <div class="card kpi"><span>{{ 'admin.activeSubscribers' | t }}</span><strong>{{ activeSubs() }}</strong></div>
+    <div class="dash-head">
+      <div>
+        <h1 class="pg-title">Tableau de bord</h1>
+        <p class="dash-date">{{ todayLabel }}</p>
+      </div>
+      <a class="btn btn--primary" routerLink="/admin/generer">Générer un document</a>
+    </div>
+
+    <!-- Ligne 1 : les quatre chiffres qui comptent -->
+    <div class="hero-grid">
+      <a class="card hero" routerLink="/admin/factures">
+        <span class="hero-label">CA encaissé</span>
+        <strong class="hero-value">{{ revenuePaid() | number:'1.0-0' }} <small>MAD</small></strong>
+        <span class="hero-sub ok">{{ paidCount() }} facture(s) payée(s)</span>
+      </a>
+      <a class="card hero" routerLink="/admin/factures" [class.hero--warn]="unpaidTotal() > 0">
+        <span class="hero-label">À encaisser</span>
+        <strong class="hero-value">{{ unpaidTotal() | number:'1.0-0' }} <small>MAD</small></strong>
+        <span class="hero-sub" [class.warn]="unpaidCount() > 0">{{ unpaidCount() }} facture(s) en attente</span>
+      </a>
+      <a class="card hero" routerLink="/admin/devis" [class.hero--warn]="newCount() > 0">
+        <span class="hero-label">Devis à traiter</span>
+        <strong class="hero-value">{{ newCount() }}</strong>
+        <span class="hero-sub">sur {{ quotes().length }} devis reçus</span>
+      </a>
+      <a class="card hero hero--gold" routerLink="/admin/fatora">
+        <span class="hero-label">Fatora-Bot — revenu mensuel</span>
+        <strong class="hero-value">{{ (fatora()?.mrr ?? 0) | number:'1.0-0' }} <small>DH</small></strong>
+        <span class="hero-sub">{{ fatora()?.paying ?? 0 }} payant(s) / {{ fatora()?.tenants ?? 0 }} comptes</span>
+      </a>
+    </div>
+
+    <!-- Ligne 2 : facturation 6 mois + derniers devis -->
+    <div class="two-col">
+      <div class="card panel">
+        <div class="panel-head">
+          <h2>Facturation — 6 derniers mois</h2>
+          <a routerLink="/admin/factures" class="see-all">Toutes les factures →</a>
+        </div>
+        @if (chart().max > 0) {
+          <svg class="chart" viewBox="0 0 600 230" preserveAspectRatio="none" role="img"
+               aria-label="Montants facturés par mois">
+            @for (m of chart().months; track m.key; let i = $index) {
+              <g>
+                <rect [attr.x]="20 + i * 97" [attr.y]="180 - m.hTotal" width="34" [attr.height]="m.hTotal"
+                      rx="5" class="bar-total" />
+                <rect [attr.x]="20 + i * 97 + 40" [attr.y]="180 - m.hPaid" width="34" [attr.height]="m.hPaid"
+                      rx="5" class="bar-paid" />
+                <text [attr.x]="20 + i * 97 + 37" y="200" text-anchor="middle" class="axis">{{ m.label }}</text>
+                <text [attr.x]="20 + i * 97 + 37" [attr.y]="172 - (m.hTotal > m.hPaid ? m.hTotal : m.hPaid)"
+                      text-anchor="middle" class="val">{{ m.total | number:'1.0-0' }}</text>
+              </g>
+            }
+          </svg>
+          <div class="legend">
+            <span><i class="dot dot-total"></i> Facturé TTC</span>
+            <span><i class="dot dot-paid"></i> Encaissé</span>
+          </div>
+        } @else {
+          <p class="empty">Aucune facture sur les six derniers mois.
+            <a routerLink="/admin/generer">Créer la première →</a></p>
+        }
+      </div>
+
+      <div class="card panel">
+        <div class="panel-head">
+          <h2>Derniers devis</h2>
+          <a routerLink="/admin/devis" class="see-all">Tout voir →</a>
+        </div>
+        @if (recentQuotes().length) {
+          <ul class="rows">
+            @for (q of recentQuotes(); track q.id) {
+              <li>
+                <div class="row-main">
+                  <strong>{{ q.number }}</strong>
+                  <span class="row-client">{{ q.customer.name }}</span>
+                </div>
+                <div class="row-side">
+                  <span class="row-amount">{{ q.totalTTC | number:'1.0-0' }} MAD</span>
+                  <span [class]="'chip chip--' + chipTone(q.status)">{{ chipLabel(q.status) }}</span>
+                </div>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="empty">Aucun devis pour le moment. Ils arrivent du formulaire du site.</p>
+        }
+      </div>
+    </div>
+
+    <!-- Ligne 3 : dernières factures + santé Fatora -->
+    <div class="two-col">
+      <div class="card panel">
+        <div class="panel-head">
+          <h2>Dernières factures</h2>
+          <a routerLink="/admin/factures" class="see-all">Tout voir →</a>
+        </div>
+        @if (recentInvoices().length) {
+          <ul class="rows">
+            @for (f of recentInvoices(); track f.id) {
+              <li>
+                <div class="row-main">
+                  <strong>{{ f.number }}</strong>
+                  <span class="row-client">{{ f.customer.name }}</span>
+                </div>
+                <div class="row-side">
+                  <span class="row-amount">{{ f.totalTTC | number:'1.0-0' }} MAD</span>
+                  <span [class]="f.status === 'paid' ? 'chip chip--ok' : 'chip chip--warn'">
+                    {{ f.status === 'paid' ? 'Payée' : 'En attente' }}
+                  </span>
+                </div>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="empty">Aucune facture émise pour l'instant.</p>
+        }
+      </div>
+
+      <div class="card panel">
+        <div class="panel-head">
+          <h2>Fatora-Bot — santé</h2>
+          <a routerLink="/admin/fatora" class="see-all">Gérer →</a>
+        </div>
+        @if (fatora(); as f) {
+          <ul class="health">
+            <li><span>En période d'essai</span><b>{{ f.trial }}</b></li>
+            <li [class.alert]="f.exhausted > 0"><span>Quota épuisé</span><b>{{ f.exhausted }}</b></li>
+            <li [class.alert]="(f.expiringSoon || 0) > 0"><span>Échéance sous 7 jours</span><b>{{ f.expiringSoon || 0 }}</b></li>
+            <li [class.alert]="(f.expired || 0) > 0"><span>Abonnements expirés</span><b>{{ f.expired || 0 }}</b></li>
+            <li><span>Factures émises ce mois</span><b>{{ f.invoicesMonth }}</b></li>
+            <li><span>Facturé ce mois</span><b>{{ f.billedMonth | number:'1.0-0' }} DH</b></li>
+          </ul>
+          @if (f.exhausted > 0 || (f.expiringSoon || 0) > 0) {
+            <p class="hint">Des clients sont à relancer — c'est du revenu qui attend.</p>
+          }
+        } @else {
+          <p class="empty">Connexion à Fatora-Bot…</p>
+        }
+      </div>
     </div>
   `,
   styles: [`
-    .pg-title { font-size: 1.5rem; margin-bottom: 1.5rem; }
-    .kpi { display: flex; flex-direction: column; gap: .4rem; }
-    .kpi span { font-size: .82rem; color: var(--c-text-soft); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
-    .kpi strong { font-family: var(--font-display); font-size: 2rem; color: var(--c-primary); }
-    .kpi small { font-size: .9rem; color: var(--c-text-soft); }
-    .grid-4 { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+    .dash-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem;
+      flex-wrap: wrap; margin-bottom: 1.6rem; }
+    .pg-title { font-size: 1.5rem; margin: 0; }
+    .dash-date { color: var(--c-text-soft); font-size: .9rem; margin: .3rem 0 0; text-transform: capitalize; }
+
+    .hero-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 1rem; margin-bottom: 1.2rem; }
+    .hero { display: flex; flex-direction: column; gap: .45rem; padding: 1.3rem 1.4rem;
+      text-decoration: none; transition: transform .15s, box-shadow .15s; }
+    .hero:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(15,15,15,.10); }
+    .hero-label { font-size: .78rem; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--c-text-soft); }
+    .hero-value { font-family: var(--font-display); font-size: 1.9rem; color: var(--c-primary); line-height: 1.1; }
+    .hero-value small { font-size: .85rem; color: var(--c-text-soft); font-weight: 600; }
+    .hero-sub { font-size: .82rem; color: var(--c-text-soft); }
+    .hero-sub.ok { color: var(--c-success); }
+    .hero-sub.warn { color: #b45309; font-weight: 600; }
+    .hero--warn { border: 1px solid #f6c98f; background: #fffaf3; }
+    .hero--gold .hero-value { color: #b8860b; }
+
+    .two-col { display: grid; grid-template-columns: 1.25fr 1fr; gap: 1rem; margin-bottom: 1.2rem; }
+    @media (max-width: 980px) { .two-col { grid-template-columns: 1fr; } }
+    .panel { padding: 1.2rem 1.4rem; }
+    .panel-head { display: flex; justify-content: space-between; align-items: baseline;
+      gap: 1rem; margin-bottom: .9rem; }
+    .panel-head h2 { font-size: 1.02rem; margin: 0; }
+    .see-all { font-size: .82rem; color: var(--c-primary); text-decoration: none; font-weight: 600;
+      white-space: nowrap; }
+
+    .chart { width: 100%; height: 215px; }
+    .bar-total { fill: var(--c-primary-300); opacity: .55; }
+    .bar-paid { fill: var(--c-success); }
+    .axis { font-size: 12px; fill: var(--c-text-soft); }
+    .val { font-size: 10.5px; fill: var(--c-text-soft); }
+    .legend { display: flex; gap: 1.2rem; font-size: .8rem; color: var(--c-text-soft); margin-top: .3rem; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: .35rem; }
+    .dot-total { background: var(--c-primary-300); opacity: .55; }
+    .dot-paid { background: var(--c-success); }
+
+    .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+    .rows li { display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+      padding: .65rem 0; border-bottom: 1px solid rgba(15,15,15,.06); }
+    .rows li:last-child { border-bottom: 0; }
+    .row-main { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+    .row-main strong { font-size: .88rem; }
+    .row-client { font-size: .8rem; color: var(--c-text-soft); overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; max-width: 190px; }
+    .row-side { display: flex; align-items: center; gap: .7rem; flex-shrink: 0; }
+    .row-amount { font-size: .86rem; font-weight: 700; }
+
+    .chip { font-size: .7rem; font-weight: 700; padding: .22rem .55rem; border-radius: 999px;
+      letter-spacing: .02em; white-space: nowrap; }
+    .chip--new { background: #ede9fe; color: #5b21b6; }
+    .chip--ok { background: #d1fae5; color: #065f46; }
+    .chip--info { background: #dbeafe; color: #1e40af; }
+    .chip--warn { background: #fef3c7; color: #92400e; }
+    .chip--muted { background: #f1f2f4; color: #6b7280; }
+
+    .health { list-style: none; margin: 0; padding: 0; }
+    .health li { display: flex; justify-content: space-between; padding: .55rem 0;
+      border-bottom: 1px solid rgba(15,15,15,.06); font-size: .88rem; }
+    .health li:last-child { border-bottom: 0; }
+    .health li span { color: var(--c-text-soft); }
+    .health li b { font-weight: 700; }
+    .health li.alert span, .health li.alert b { color: #b45309; }
+    .hint { margin: .8rem 0 0; font-size: .82rem; color: #b45309; background: #fffaf3;
+      border-radius: 8px; padding: .55rem .8rem; }
+
+    .empty { color: var(--c-text-soft); font-size: .9rem; padding: 1.4rem 0; text-align: center; }
+    .empty a { color: var(--c-primary); font-weight: 600; text-decoration: none; }
   `],
 })
 export class AdminDashboardComponent implements OnInit {
   private api = inject(ApiService);
   private seo = inject(SeoService);
+  private http = inject(HttpClient);
+  private base = inject(API_BASE);
+
+  readonly todayLabel = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   quotes = signal<Quote[]>([]);
   invoices = signal<Invoice[]>([]);
-  products = signal<Product[]>([]);
-  subscribers = signal<Subscriber[]>([]);
+  fatora = signal<FatoraStatsLite | null>(null);
+
   newCount = computed(() => this.quotes().filter(q => q.status === 'new').length);
-  revenue = computed(() => this.invoices().filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.totalTTC), 0));
-  activeSubs = computed(() => this.subscribers().filter(s => s.status === 'active').length);
+  paidCount = computed(() => this.invoices().filter(i => i.status === 'paid').length);
+  revenuePaid = computed(() => this.invoices().filter(i => i.status === 'paid')
+    .reduce((s, i) => s + Number(i.totalTTC || 0), 0));
+  unpaidCount = computed(() => this.invoices().filter(i => i.status !== 'paid' && i.status !== 'cancelled').length);
+  unpaidTotal = computed(() => this.invoices().filter(i => i.status !== 'paid' && i.status !== 'cancelled')
+    .reduce((s, i) => s + Number(i.totalTTC || 0), 0));
+
+  recentQuotes = computed(() => [...this.quotes()]
+    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)).slice(0, 5));
+  recentInvoices = computed(() => [...this.invoices()]
+    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)).slice(0, 5));
+
+  /** Six derniers mois de facturation, prêts à dessiner (hauteurs en pixels SVG). */
+  chart = computed(() => {
+    const now = new Date();
+    const months: { key: string; label: string; total: number; paid: number; hTotal: number; hPaid: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        key: `${d.getFullYear()}-${d.getMonth()}`,
+        label: d.toLocaleDateString('fr-FR', { month: 'short' }),
+        total: 0, paid: 0, hTotal: 0, hPaid: 0,
+      });
+    }
+    const index = new Map(months.map((m, i) => [m.key, i] as const));
+    for (const inv of this.invoices()) {
+      if (inv.status === 'cancelled') continue;
+      const d = new Date(inv.createdAt);
+      const idx = index.get(`${d.getFullYear()}-${d.getMonth()}`);
+      if (idx === undefined) continue;
+      const amount = Number(inv.totalTTC || 0);
+      months[idx].total += amount;
+      if (inv.status === 'paid') months[idx].paid += amount;
+    }
+    const max = Math.max(...months.map(m => m.total), 0);
+    if (max > 0) {
+      for (const m of months) {
+        m.hTotal = Math.round((m.total / max) * 150);
+        m.hPaid = Math.round((m.paid / max) * 150);
+      }
+    }
+    return { months, max };
+  });
+
+  chipLabel(status: string): string {
+    const map: Record<string, string> = {
+      new: 'Nouveau', sent: 'Envoyé', accepted: 'Accepté',
+      rejected: 'Refusé', expired: 'Expiré', invoiced: 'Facturé',
+    };
+    return map[status] || status;
+  }
+  chipTone(status: string): string {
+    const map: Record<string, string> = {
+      new: 'new', sent: 'info', accepted: 'ok', invoiced: 'ok',
+      rejected: 'muted', expired: 'muted',
+    };
+    return map[status] || 'muted';
+  }
 
   ngOnInit() {
     this.seo.noIndex('Dashboard — SWIVIQ Admin');
     this.api.adminQuotes().subscribe({ next: q => this.quotes.set(q), error: () => {} });
     this.api.adminInvoices().subscribe({ next: i => this.invoices.set(i), error: () => {} });
-    this.api.adminProducts().subscribe({ next: p => this.products.set(p), error: () => {} });
-    this.api.adminSubscribers().subscribe({ next: s => this.subscribers.set(s), error: () => {} });
+    this.http.get<FatoraStatsLite>(`${this.base}/api/admin/fatora/stats`)
+      .subscribe({ next: s => this.fatora.set(s), error: () => {} });
   }
 }
 
