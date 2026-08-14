@@ -74,9 +74,22 @@ export class AdminLoginComponent implements OnInit {
   imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, LogoComponent],
   template: `
     <div class="adm">
-      <aside class="adm__side">
-        <a routerLink="/" class="adm__logo"><svq-logo [size]="28" variant="white" /></a>
-        <nav>
+      <!-- Barre mobile : logo + burger. Cachée sur desktop. -->
+      <header class="adm__topbar">
+        <a routerLink="/" class="adm__logo"><svq-logo [size]="26" variant="white" /></a>
+        <button class="adm__burger" (click)="menuOpen.set(!menuOpen())"
+                [attr.aria-expanded]="menuOpen()" aria-label="Menu">
+          @if (menuOpen()) { ✕ } @else { ☰ }
+        </button>
+      </header>
+
+      @if (menuOpen()) {
+        <div class="adm__backdrop" (click)="menuOpen.set(false)"></div>
+      }
+
+      <aside class="adm__side" [class.open]="menuOpen()">
+        <a routerLink="/" class="adm__logo adm__logo--side"><svq-logo [size]="28" variant="white" /></a>
+        <nav (click)="menuOpen.set(false)">
           <a routerLink="/admin" routerLinkActive="on" [routerLinkActiveOptions]="{exact:true}">{{ 'admin.dashboard' | t }}</a>
           <a routerLink="/admin/devis" routerLinkActive="on">{{ 'admin.quotes' | t }}</a>
           <a routerLink="/admin/factures" routerLinkActive="on">{{ 'admin.invoices' | t }}</a>
@@ -89,6 +102,7 @@ export class AdminLoginComponent implements OnInit {
         </nav>
         <button class="adm__logout" (click)="logout()">{{ 'admin.logout' | t }}</button>
       </aside>
+
       <main class="adm__main">
         <router-outlet />
       </main>
@@ -96,12 +110,14 @@ export class AdminLoginComponent implements OnInit {
   `,
   styles: [`
     .adm { display: grid; grid-template-columns: 230px 1fr; min-height: 100vh; background: var(--c-surface); }
+    .adm__topbar { display: none; }
+    .adm__backdrop { display: none; }
     .adm__side {
       background: var(--c-ink); padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 2rem;
       position: sticky; top: 0; height: 100vh;
     }
     .adm__logo { padding-inline: .6rem; }
-    .adm__side nav { display: flex; flex-direction: column; gap: .3rem; flex: 1; }
+    .adm__side nav { display: flex; flex-direction: column; gap: .3rem; flex: 1; overflow-y: auto; }
     .adm__side nav a {
       padding: .7rem .9rem; border-radius: 10px; color: var(--c-text-inverse-soft);
       font-weight: 600; font-size: .92rem; transition: .2s;
@@ -110,17 +126,40 @@ export class AdminLoginComponent implements OnInit {
     .adm__side nav a.on { color: #fff; background: var(--grad-brand); }
     .adm__logout { color: var(--c-text-inverse-soft); text-align: start; padding: .7rem .9rem; font-size: .9rem; }
     .adm__logout:hover { color: #fff; }
-    .adm__main { padding: 2rem; }
-    @media (max-width: 800px) {
-      .adm { grid-template-columns: 1fr; }
-      .adm__side { position: static; height: auto; flex-direction: row; align-items: center; }
-      .adm__side nav { flex-direction: row; flex-wrap: wrap; }
+    /* min-width: 0 — sans lui, la colonne 1fr refuse de rétrécir sous la
+       largeur des tableaux et TOUTES les pages débordent sur mobile. */
+    .adm__main { padding: 2rem; min-width: 0; }
+
+    @media (max-width: 900px) {
+      .adm { display: block; }
+      .adm__topbar {
+        display: flex; align-items: center; justify-content: space-between;
+        background: var(--c-ink); padding: .7rem 1rem;
+        position: sticky; top: 0; z-index: 60;
+      }
+      .adm__burger {
+        color: #fff; font-size: 1.35rem; line-height: 1; padding: .3rem .6rem;
+        background: rgba(255,255,255,.08); border-radius: 8px;
+      }
+      .adm__backdrop {
+        display: block; position: fixed; inset: 0; z-index: 55;
+        background: rgba(0,0,0,.45);
+      }
+      .adm__side {
+        position: fixed; top: 0; left: 0; z-index: 58; height: 100dvh;
+        width: min(280px, 82vw); transform: translateX(-100%);
+        transition: transform .22s ease; box-shadow: 8px 0 30px rgba(0,0,0,.35);
+      }
+      .adm__side.open { transform: translateX(0); }
+      .adm__logo--side { margin-top: .2rem; }
+      .adm__main { padding: 1rem; }
     }
   `],
 })
 export class AdminLayoutComponent {
   private auth = inject(AuthService);
   private router = inject(Router);
+  menuOpen = signal(false);
   logout() { this.auth.logout(); this.router.navigateByUrl('/admin/login'); }
 }
 
@@ -440,7 +479,20 @@ export class AdminDashboardComponent implements OnInit {
   selector: 'svq-admin-quotes',
   imports: [DatePipe, DecimalPipe, TPipe],
   template: `
-    <h1 class="pg-title">{{ 'admin.quotes' | t }}</h1>
+    <div class="page-head">
+      <h1 class="pg-title">{{ 'admin.quotes' | t }}</h1>
+      <span class="count">{{ filtered().length }} / {{ quotes().length }}</span>
+    </div>
+    <div class="toolbar">
+      <input class="search" type="search" placeholder="Rechercher : client, email, numéro…"
+             [value]="search()" (input)="search.set($any($event.target).value)" />
+      <select class="filter" [value]="statusFilter()" (change)="statusFilter.set($any($event.target).value)">
+        <option value="">Tous les statuts</option>
+        @for (st of statuses; track st) {
+          <option [value]="st">{{ 'admin.statuses.' + st | t }}</option>
+        }
+      </select>
+    </div>
     <div class="card tbl-wrap">
       <table class="table">
         <thead>
@@ -450,14 +502,15 @@ export class AdminDashboardComponent implements OnInit {
           </tr>
         </thead>
         <tbody>
-          @for (q of quotes(); track q.id) {
+          @for (q of filtered(); track q.id) {
             <tr>
               <td><strong>{{ q.number }}</strong></td>
               <td>{{ q.customer.name }}<br /><small>{{ q.customer.email }}</small></td>
               <td>{{ q.createdAt | date:'dd/MM/yyyy' }}</td>
               <td>{{ q.totalTTC | number:'1.2-2' }} MAD</td>
               <td>
-                <select [value]="q.status" (change)="setStatus(q, $event)">
+                <select class="chip-select" [class]="'chip-select st-' + q.status"
+                        [value]="q.status" (change)="setStatus(q, $event)">
                   @for (s of statuses; track s) {
                     <option [value]="s" [selected]="q.status === s">{{ 'admin.statuses.' + s | t }}</option>
                   }
@@ -468,17 +521,33 @@ export class AdminDashboardComponent implements OnInit {
                 <button class="btn btn--primary btn--sm" (click)="invoice(q)" [disabled]="busy()">{{ 'admin.createInvoice' | t }}</button>
               </td>
             </tr>
+          } @empty {
+            <tr><td colspan="6" class="empty-td">Aucun devis ne correspond à cette recherche.</td></tr>
           }
         </tbody>
       </table>
     </div>
   `,
   styles: [`
-    .pg-title { font-size: 1.5rem; margin-bottom: 1.5rem; }
+    .page-head { display: flex; align-items: baseline; gap: .8rem; margin-bottom: 1rem; }
+    .pg-title { font-size: 1.5rem; margin: 0; }
+    .count { font-size: .82rem; font-weight: 700; color: var(--c-text-soft);
+      background: #eef0f4; border-radius: 999px; padding: .25rem .7rem; }
+    .toolbar { display: flex; gap: .7rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .search { flex: 1; min-width: 220px; padding: .6rem .9rem; border: 1.5px solid var(--c-border);
+      border-radius: 10px; font-size: .9rem; }
+    .filter { padding: .6rem .8rem; border: 1.5px solid var(--c-border); border-radius: 10px; font-size: .9rem; }
     .tbl-wrap { padding: .5rem; overflow-x: auto; }
+    .table tbody tr:hover { background: #fafbfd; }
     .acts { display: flex; gap: .5rem; }
-    select { padding: .35rem .5rem; border-radius: 8px; border: 1.5px solid var(--c-border); font-size: .85rem; }
+    .chip-select { padding: .35rem .6rem; border-radius: 999px; border: 1.5px solid var(--c-border);
+      font-size: .8rem; font-weight: 700; cursor: pointer; }
+    .chip-select.st-new { background: #ede9fe; color: #5b21b6; border-color: #ddd3fb; }
+    .chip-select.st-sent { background: #dbeafe; color: #1e40af; border-color: #c4dafc; }
+    .chip-select.st-accepted { background: #d1fae5; color: #065f46; border-color: #a7ecd1; }
+    .chip-select.st-rejected { background: #f1f2f4; color: #6b7280; border-color: #e2e4e8; }
     small { color: var(--c-text-soft); }
+    .empty-td { text-align: center; color: var(--c-text-soft); padding: 2rem; }
   `],
 })
 export class AdminQuotesComponent implements OnInit {
@@ -490,6 +559,15 @@ export class AdminQuotesComponent implements OnInit {
   quotes = signal<Quote[]>([]);
   busy = signal(false);
   statuses = ['new', 'sent', 'accepted', 'rejected'];
+  search = signal('');
+  statusFilter = signal('');
+  filtered = computed(() => {
+    const q = this.search().toLowerCase().trim();
+    const st = this.statusFilter();
+    return this.quotes().filter(x =>
+      (!st || x.status === st) &&
+      (!q || `${x.number} ${x.customer.name} ${x.customer.email}`.toLowerCase().includes(q)));
+  });
 
   ngOnInit() {
     this.seo.noIndex('Devis — SWIVIQ Admin');
@@ -522,7 +600,25 @@ export class AdminQuotesComponent implements OnInit {
   selector: 'svq-admin-invoices',
   imports: [DatePipe, DecimalPipe, TPipe],
   template: `
-    <h1 class="pg-title">{{ 'admin.invoices' | t }}</h1>
+    <div class="page-head">
+      <h1 class="pg-title">{{ 'admin.invoices' | t }}</h1>
+      <span class="count">{{ filtered().length }} / {{ invoices().length }}</span>
+    </div>
+    <div class="toolbar">
+      <input class="search" type="search" placeholder="Rechercher : client, numéro…"
+             [value]="search()" (input)="search.set($any($event.target).value)" />
+      <select class="filter" [value]="statusFilter()" (change)="statusFilter.set($any($event.target).value)">
+        <option value="">Tous les statuts</option>
+        <option value="paid">Payée</option>
+        <option value="sent">Envoyée</option>
+        <option value="draft">Brouillon</option>
+      </select>
+    </div>
+    <div class="totals">
+      <span>Total : <b>{{ totalAll() | number:'1.0-0' }} MAD</b></span>
+      <span class="ok">Encaissé : <b>{{ totalPaid() | number:'1.0-0' }} MAD</b></span>
+      <span class="warn">En attente : <b>{{ totalDue() | number:'1.0-0' }} MAD</b></span>
+    </div>
     <div class="card tbl-wrap">
       <table class="table">
         <thead>
@@ -532,13 +628,13 @@ export class AdminQuotesComponent implements OnInit {
           </tr>
         </thead>
         <tbody>
-          @for (inv of invoices(); track inv.id) {
+          @for (inv of filtered(); track inv.id) {
             <tr>
               <td><strong>{{ inv.number }}</strong></td>
               <td>{{ inv.customer.name }}</td>
               <td>{{ inv.createdAt | date:'dd/MM/yyyy' }}</td>
               <td>{{ inv.totalTTC | number:'1.2-2' }} MAD</td>
-              <td><span class="status" [class]="inv.status">{{ 'admin.statuses.' + inv.status | t }}</span></td>
+              <td><span [class]="'chip st-' + inv.status">{{ 'admin.statuses.' + inv.status | t }}</span></td>
               <td class="acts">
                 <button class="btn btn--ghost btn--sm" (click)="openPdf(inv)">{{ 'admin.pdf' | t }}</button>
                 @if (inv.status === 'draft') {
@@ -549,15 +645,36 @@ export class AdminQuotesComponent implements OnInit {
                 }
               </td>
             </tr>
+          } @empty {
+            <tr><td colspan="6" class="empty-td">Aucune facture ne correspond à cette recherche.</td></tr>
           }
         </tbody>
       </table>
     </div>
   `,
   styles: [`
-    .pg-title { font-size: 1.5rem; margin-bottom: 1.5rem; }
+    .page-head { display: flex; align-items: baseline; gap: .8rem; margin-bottom: 1rem; }
+    .pg-title { font-size: 1.5rem; margin: 0; }
+    .count { font-size: .82rem; font-weight: 700; color: var(--c-text-soft);
+      background: #eef0f4; border-radius: 999px; padding: .25rem .7rem; }
+    .toolbar { display: flex; gap: .7rem; margin-bottom: .8rem; flex-wrap: wrap; }
+    .search { flex: 1; min-width: 220px; padding: .6rem .9rem; border: 1.5px solid var(--c-border);
+      border-radius: 10px; font-size: .9rem; }
+    .filter { padding: .6rem .8rem; border: 1.5px solid var(--c-border); border-radius: 10px; font-size: .9rem; }
+    .totals { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 1rem; font-size: .88rem;
+      color: var(--c-text-soft); }
+    .totals b { color: inherit; }
+    .totals .ok { color: var(--c-success); }
+    .totals .warn { color: #b45309; }
     .tbl-wrap { padding: .5rem; overflow-x: auto; }
+    .table tbody tr:hover { background: #fafbfd; }
     .acts { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .chip { font-size: .74rem; font-weight: 700; padding: .28rem .65rem; border-radius: 999px; }
+    .chip.st-paid { background: #d1fae5; color: #065f46; }
+    .chip.st-sent { background: #dbeafe; color: #1e40af; }
+    .chip.st-draft { background: #f1f2f4; color: #6b7280; }
+    .chip.st-cancelled { background: #fee2e2; color: #991b1b; }
+    .empty-td { text-align: center; color: var(--c-text-soft); padding: 2rem; }
   `],
 })
 export class AdminInvoicesComponent implements OnInit {
@@ -566,6 +683,20 @@ export class AdminInvoicesComponent implements OnInit {
   private seo = inject(SeoService);
   private apiBase = inject(API_BASE);
   invoices = signal<Invoice[]>([]);
+  search = signal('');
+  statusFilter = signal('');
+  filtered = computed(() => {
+    const q = this.search().toLowerCase().trim();
+    const st = this.statusFilter();
+    return this.invoices().filter(x =>
+      (!st || x.status === st) &&
+      (!q || `${x.number} ${x.customer.name} ${x.customer.email}`.toLowerCase().includes(q)));
+  });
+  totalAll = computed(() => this.filtered().reduce((t, i) => t + Number(i.totalTTC || 0), 0));
+  totalPaid = computed(() => this.filtered().filter(i => i.status === 'paid')
+    .reduce((t, i) => t + Number(i.totalTTC || 0), 0));
+  totalDue = computed(() => this.filtered().filter(i => i.status !== 'paid' && i.status !== 'cancelled')
+    .reduce((t, i) => t + Number(i.totalTTC || 0), 0));
 
   ngOnInit() {
     this.seo.noIndex('Factures — SWIVIQ Admin');
@@ -648,9 +779,10 @@ export class AdminInvoicesComponent implements OnInit {
     .pg-title { font-size: 1.5rem; margin-bottom: 1.5rem; }
     .blk { margin-bottom: 1.5rem; }
     .blk h2 { font-size: 1.05rem; margin-bottom: 1rem; }
-    .row { display: flex; gap: .8rem; margin-bottom: .6rem; }
-    .row input { padding: .55rem .8rem; border: 1.5px solid var(--c-border); border-radius: 8px; }
-    .row input[type=number] { width: 130px; }
+    .row { display: flex; gap: .8rem; margin-bottom: .6rem; flex-wrap: wrap; }
+    .row input { padding: .55rem .8rem; border: 1.5px solid var(--c-border); border-radius: 8px; min-width: 0; }
+    .row input[type=number] { width: 130px; flex-shrink: 0; }
+    .row .grow { flex: 1 1 200px; }
     .grow { flex: 1; }
     .ok { color: var(--c-success); font-weight: 600; margin-bottom: 1rem; }
     input.invalid {
@@ -739,8 +871,8 @@ export class AdminSettingsComponent implements OnInit {
               <td><img [src]="p.coverUrl" class="mini-img" /></td>
               <td><strong>{{ p.name }}</strong><br><small>{{ p.tagline }}</small></td>
               <td>{{ p.slug }}</td>
-              <td><span class="status">{{ p.type }}</span></td>
-              <td><span class="status" [class]="p.status">{{ p.status }}</span></td>
+              <td><span class="chip chip--type">{{ p.type }}</span></td>
+              <td><span [class]="'chip st-' + p.status">{{ p.status }}</span></td>
               <td class="acts">
                 <a [routerLink]="['/admin/produits', p.id]" class="btn btn--ghost btn--sm">{{ 'admin.editProduct' | t }}</a>
                 <button class="btn btn--ghost btn--sm" (click)="remove(p)" [disabled]="busy()">
@@ -762,6 +894,12 @@ export class AdminSettingsComponent implements OnInit {
     .acts { display: flex; gap: .5rem; flex-wrap: wrap; }
     .mini-img { width: 48px; height: 36px; object-fit: cover; border-radius: 6px; }
     .empty-td { text-align: center; color: var(--c-text-soft); padding: 2rem; }
+    .chip { font-size: .72rem; font-weight: 700; padding: .26rem .6rem; border-radius: 999px; }
+    .chip--type { background: #eef0f4; color: #4b5563; text-transform: uppercase; letter-spacing: .04em; }
+    .chip.st-live { background: #d1fae5; color: #065f46; }
+    .chip.st-beta { background: #fef3c7; color: #92400e; }
+    .chip.st-coming-soon { background: #ede9fe; color: #5b21b6; }
+    .table tbody tr:hover { background: #fafbfd; }
   `],
 })
 export class AdminProductsComponent implements OnInit {
@@ -1259,7 +1397,7 @@ export class AdminProductFormComponent implements OnInit {
               <td>{{ s.product?.name || '-' }}</td>
               <td>{{ s.plan?.name || '-' }}<br /><small>{{ s.plan?.price }} {{ s.plan?.currency }} {{ s.plan?.interval }}</small></td>
               <td>
-                <select [value]="s.status" (change)="setStatus(s, $event)">
+                <select [class]="'chip-select st-' + s.status" [value]="s.status" (change)="setStatus(s, $event)">
                   <option value="pending">{{ 'admin.statuses.pending' | t }}</option>
                   <option value="active">{{ 'admin.statuses.active' | t }}</option>
                   <option value="suspended">{{ 'admin.statuses.suspended' | t }}</option>
@@ -1282,9 +1420,15 @@ export class AdminProductFormComponent implements OnInit {
     .pg-title { font-size: 1.5rem; margin-bottom: 1.5rem; }
     .tbl-wrap { padding: .5rem; overflow-x: auto; }
     .acts { display: flex; gap: .5rem; flex-wrap: wrap; }
-    select { padding: .35rem .5rem; border-radius: 8px; border: 1.5px solid var(--c-border); font-size: .85rem; }
+    .chip-select { padding: .35rem .6rem; border-radius: 999px; border: 1.5px solid var(--c-border);
+      font-size: .8rem; font-weight: 700; cursor: pointer; }
+    .chip-select.st-active { background: #d1fae5; color: #065f46; border-color: #a7ecd1; }
+    .chip-select.st-pending { background: #fef3c7; color: #92400e; border-color: #f6e2ac; }
+    .chip-select.st-suspended { background: #fee2e2; color: #991b1b; border-color: #fbc9c9; }
+    .chip-select.st-cancelled { background: #f1f2f4; color: #6b7280; border-color: #e2e4e8; }
     small { color: var(--c-text-soft); }
     .empty-td { text-align: center; color: var(--c-text-soft); padding: 2rem; }
+    .table tbody tr:hover { background: #fafbfd; }
   `],
 })
 export class AdminSubscribersComponent implements OnInit {
