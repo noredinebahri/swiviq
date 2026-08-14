@@ -42,37 +42,126 @@ const PLAN_OPTIONS = [
   { key: 'p100', label: 'Entreprise — 100 factures', price: 90 }
 ];
 
+type Segment = '' | 'paying' | 'trial' | 'exhausted' | 'expiring' | 'onboarding' | 'suspended';
+
+/**
+ * Fatora-Bot — poste de commandement des abonnements.
+ *
+ * L'ancien écran RAPPORTAIT (onze tuiles grises). Celui-ci fait AGIR :
+ * la file « À traiter aujourd'hui » transforme chaque signal — quota
+ * épuisé, échéance proche, essai qui dort — en action à un clic, avec un
+ * message WhatsApp déjà rédigé pour la situation. Un quota épuisé n'est
+ * pas une alerte, c'est un client prêt à payer.
+ */
 @Component({
   selector: 'svq-admin-fatora',
   imports: [FormsModule, DatePipe, DecimalPipe],
   template: `
-    <h1 class="pg-title">Fatora-Bot — abonnements</h1>
-
     @if (error()) { <div class="alert">{{ error() }}</div> }
 
-    <!-- Indicateurs -->
-    @if (stats(); as s) {
-      <div class="kpis">
-        <div class="kpi"><b>{{ s.tenants }}</b><span>Comptes</span></div>
-        <div class="kpi"><b>{{ s.paying }}</b><span>Abonnés payants</span></div>
-        <div class="kpi gold"><b>{{ s.mrr | number:'1.0-0' }} DH</b><span>Revenu mensuel</span></div>
-        <div class="kpi"><b>{{ s.trial }}</b><span>En essai</span></div>
-        <div class="kpi" [class.warn]="s.exhausted > 0"><b>{{ s.exhausted }}</b><span>Quota épuisé</span></div>
-        <div class="kpi" [class.warn]="(s.expiringSoon || 0) > 0"><b>{{ s.expiringSoon || 0 }}</b><span>Échéance sous 7 j</span></div>
-        <div class="kpi" [class.warn]="(s.expired || 0) > 0"><b>{{ s.expired || 0 }}</b><span>Abonnements expirés</span></div>
-        <div class="kpi" [class.warn]="(s.suspended || 0) > 0"><b>{{ s.suspended || 0 }}</b><span>Comptes suspendus</span></div>
-        <div class="kpi"><b>{{ s.invoicesMonth }}</b><span>Factures ce mois</span></div>
-        <div class="kpi"><b>{{ s.billedMonth | number:'1.0-0' }} DH</b><span>Facturé ce mois (hors annulées)</span></div>
-        <div class="kpi"><b>{{ s.cancelled || 0 }}</b><span>Factures annulées</span></div>
+    <!-- ═══════════ COCKPIT ═══════════ -->
+    <section class="hero">
+      <div class="hero__brand">
+        <div class="hero__mark">ف</div>
+        <div>
+          <h1>Fatora-Bot</h1>
+          <span class="hero__date">{{ todayLabel }}</span>
+        </div>
+        <button class="hero__copy" (click)="copyBrief()" title="Copier le récap du jour pour WhatsApp">
+          {{ copied() ? 'Récap copié ✓' : 'Copier le récap' }}
+        </button>
       </div>
+
+      @if (stats(); as s) {
+        <div class="hero__grid">
+          <div class="hero__mrr">
+            <span class="lbl">Revenu mensuel récurrent</span>
+            <strong>{{ s.mrr | number:'1.0-0' }} <em>DH</em></strong>
+            @if (potentialMrr() > 0) {
+              <span class="pot">+{{ potentialMrr() | number:'1.0-0' }} DH potentiels si les essais convertissent</span>
+            } @else {
+              <span class="pot dim">{{ s.paying }} abonnement(s) payant(s)</span>
+            }
+            <!-- Répartition du parc par plan -->
+            <div class="dist" title="Répartition des comptes par plan">
+              @for (d of planDist(); track d.key) {
+                <i [style.flex-grow]="d.n" [class]="'seg-' + d.key" [title]="d.label + ' : ' + d.n"></i>
+              }
+            </div>
+            <div class="dist-legend">
+              @for (d of planDist(); track d.key) {
+                @if (d.n > 0) { <span><i [class]="'dot seg-' + d.key"></i>{{ d.short }} {{ d.n }}</span> }
+              }
+            </div>
+          </div>
+
+          <div class="hero__funnel">
+            <span class="lbl">Parcours de conversion</span>
+            <div class="funnel">
+              <div class="step">
+                <b>{{ s.tenants }}</b><span>inscrits</span>
+              </div>
+              <div class="arr">→ {{ ratio(s.trial + s.paying, s.tenants) }}<span class="pcent">%</span></div>
+              <div class="step">
+                <b>{{ s.trial + s.paying }}</b><span>essais démarrés</span>
+              </div>
+              <div class="arr gold">→ {{ ratio(s.paying, s.trial + s.paying) }}<span class="pcent">%</span></div>
+              <div class="step gold">
+                <b>{{ s.paying }}</b><span>payants</span>
+              </div>
+            </div>
+            <span class="funnel-hint">{{ conversionHint() }}</span>
+          </div>
+
+          <div class="hero__month">
+            <span class="lbl">Ce mois</span>
+            <div class="mrow"><b>{{ s.billedMonth | number:'1.0-0' }} DH</b><span>facturés par vos clients</span></div>
+            <div class="mrow"><b>{{ s.invoicesMonth }}</b><span>factures émises</span></div>
+            <div class="mrow" [class.warn]="(s.cancelled || 0) > 0"><b>{{ s.cancelled || 0 }}</b><span>annulées</span></div>
+          </div>
+        </div>
+      }
+    </section>
+
+    <!-- ═══════════ À TRAITER AUJOURD'HUI ═══════════ -->
+    @if (actionQueue().length) {
+      <section class="queue">
+        <h2>À traiter aujourd'hui <span class="badge">{{ actionQueue().length }}</span></h2>
+        <div class="queue__scroll">
+          @for (a of actionQueue(); track a.tenant.id) {
+            <div class="qcard" [class]="'qcard q-' + a.kind">
+              <div class="qhead">
+                <span class="qtag">{{ a.tag }}</span>
+                <span class="qwho">{{ a.tenant.company || '+' + a.tenant.phone }}</span>
+              </div>
+              <p class="qwhy">{{ a.why }}</p>
+              <div class="qacts">
+                <button class="qbtn qbtn--main" (click)="sendTemplate(a)">{{ a.cta }}</button>
+                <a class="qbtn" [href]="waLink(a.tenant)" target="_blank" rel="noopener" title="Ouvrir WhatsApp">WhatsApp</a>
+                <button class="qbtn" (click)="open(a.tenant)">Fiche</button>
+              </div>
+            </div>
+          }
+        </div>
+      </section>
     }
 
-    <!-- Filtres -->
+    <!-- ═══════════ SEGMENTS + OUTILS ═══════════ -->
+    <div class="segments">
+      @for (seg of segments(); track seg.key) {
+        <button [class.on]="segment() === seg.key" (click)="segment.set(seg.key)">
+          {{ seg.label }} <b>{{ seg.n }}</b>
+        </button>
+      }
+    </div>
+
     <div class="bar">
       <input [(ngModel)]="q" (keyup.enter)="load()" placeholder="Rechercher : société, téléphone, ICE…" />
-      <select [(ngModel)]="planFilter" (change)="load()">
-        <option value="">Tous les plans</option>
-        @for (p of plans; track p.key) { <option [value]="p.key">{{ p.label }}</option> }
+      <select [(ngModel)]="sortMode">
+        <option value="risk">Tri : à traiter d'abord</option>
+        <option value="recent">Tri : plus récents</option>
+        <option value="revenue">Tri : plus gros plans</option>
+        <option value="usage">Tri : plus actifs</option>
       </select>
       <button class="btn btn--ghost btn--sm" (click)="load()">Actualiser</button>
       <button class="btn btn--ghost btn--sm" (click)="exportCsv()">Export CSV</button>
@@ -114,36 +203,53 @@ const PLAN_OPTIONS = [
       </div>
     }
 
-    <!-- Comptes -->
+    <!-- ═══════════ COMPTES ═══════════ -->
     <div class="card tbl-wrap">
       <table class="table">
         <thead><tr>
-          <th>Entreprise</th><th>WhatsApp</th><th>Plan</th><th>Quota</th>
-          <th>Échéance</th><th>Factures</th><th>Actions</th>
+          <th>Entreprise</th><th>Santé</th><th>Plan</th><th>Quota</th>
+          <th>Échéance</th><th>Activité</th><th>Actions</th>
         </tr></thead>
         <tbody>
-          @for (t of tenants(); track t.id) {
+          @for (t of visibleTenants(); track t.id) {
             <tr [class.dim]="t.status === 'onboarding'">
               <td>
-                <strong>{{ t.company || '(inscription en cours)' }}</strong>
-                <div class="meta">
-                  @if (t.suspended) { <span class="tag ko">suspendu</span> }
-                  @if (t.ice) { <span>ICE {{ t.ice }}</span> }
-                  @if (t.voice) { <span class="tag">vocal</span> }
-                  @if (t.hasStamp) { <span class="tag">cachet</span> }
-                  @if (t.hasLogo) { <span class="tag">logo</span> }
+                <div class="who">
+                  <span class="avatar" [class.avatar--gold]="t.plan !== 'trial'">{{ initials(t) }}</span>
+                  <div>
+                    <strong>{{ t.company || '(inscription en cours)' }}</strong>
+                    <div class="meta">
+                      <code>+{{ t.phone }}</code>
+                      @if (t.ice) { <span>ICE {{ t.ice }}</span> }
+                      @if (t.voice) { <span class="tag">vocal</span> }
+                      @if (t.hasStamp) { <span class="tag">cachet</span> }
+                      @if (t.hasLogo) { <span class="tag">logo</span> }
+                    </div>
+                  </div>
                 </div>
               </td>
-              <td><code>+{{ t.phone }}</code></td>
               <td>
-                <select [value]="t.plan" (change)="changePlan(t, $event)">
-                  @for (p of plans; track p.key) { <option [value]="p.key">{{ p.label }}</option> }
+                <span [class]="'health h-' + health(t).key">
+                  <i></i>{{ health(t).label }}
+                </span>
+              </td>
+              <td>
+                <select [class]="'plansel p-' + t.plan" (change)="changePlan(t, $event)">
+                  @for (p of plans; track p.key) {
+                    <option [value]="p.key" [selected]="p.key === t.plan">{{ p.label }}</option>
+                  }
                 </select>
                 <div class="meta">{{ t.price }} DH/mois</div>
               </td>
               <td>
-                <div class="quota"><i [style.width.%]="pct(t)" [class.full]="t.exhausted"></i></div>
-                <div class="meta">{{ t.used }} / {{ t.limit }}</div>
+                <div class="quota">
+                  <i [style.width.%]="pct(t)"
+                     [class.mid]="pct(t) >= 60 && !t.exhausted"
+                     [class.full]="t.exhausted"></i>
+                </div>
+                <div class="meta">{{ t.used }} / {{ t.limit }}
+                  @if (t.exhausted) { <b class="opp">· prêt pour l'upgrade</b> }
+                </div>
               </td>
               <td>
                 @if (t.plan === 'trial') { <span class="meta">—</span> }
@@ -153,39 +259,47 @@ const PLAN_OPTIONS = [
                   <div class="meta">{{ t.daysLeft }} j</div>
                 }
               </td>
-              <td>{{ t.invoices || 0 }}</td>
+              <td>
+                <b class="inv-n">{{ t.invoices || 0 }}</b>
+                <div class="meta">{{ t.lastInvoiceAt ? 'dern. ' + (t.lastInvoiceAt | date:'dd/MM') : 'jamais facturé' }}</div>
+              </td>
               <td class="acts">
+                <a class="btn btn--ghost btn--sm wa" [href]="waLink(t)" target="_blank" rel="noopener"
+                   title="Ouvrir la conversation WhatsApp">WhatsApp</a>
                 <button class="btn btn--ghost btn--sm" (click)="open(t)">Détail</button>
                 <button class="btn btn--ghost btn--sm" (click)="askMessage(t)">Message</button>
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="7" class="empty-td">Aucun compte</td></tr>
+            <tr><td colspan="7" class="empty-td">Aucun compte dans ce segment</td></tr>
           }
         </tbody>
       </table>
     </div>
 
-    <!-- Détail -->
+    <!-- ═══════════ DÉTAIL ═══════════ -->
     @if (detail(); as d) {
       <div class="modal" (click)="detail.set(null)">
         <div class="sheet" (click)="$event.stopPropagation()">
           <button class="x" (click)="detail.set(null)">×</button>
-          <h2>{{ d.company || '(sans nom)' }}</h2>
-          <div class="meta big">
-            +{{ d.phone }} · {{ d.planLabel }} · {{ d.used }}/{{ d.limit }} factures ce mois
+          <div class="sheet-head">
+            <span class="avatar avatar--big" [class.avatar--gold]="d.plan !== 'trial'">{{ initials(d) }}</span>
+            <div>
+              <h2>{{ d.company || '(sans nom)' }}</h2>
+              <div class="meta big">+{{ d.phone }} · {{ d.planLabel }} · {{ d.used }}/{{ d.limit }} factures ce mois</div>
+            </div>
           </div>
 
-          <!-- Actions de gestion -->
           <div class="acts-row">
+            <a class="btn btn--primary btn--sm" [href]="waLink(d)" target="_blank" rel="noopener">Ouvrir WhatsApp</a>
             <button class="btn btn--ghost btn--sm" (click)="editing.set(!editing())">
-              {{ editing() ? 'Annuler la modification' : '✏️ Modifier la fiche' }}
+              {{ editing() ? 'Annuler la modification' : 'Modifier la fiche' }}
             </button>
             <button class="btn btn--ghost btn--sm" (click)="toggleSuspend(d)">
-              {{ d.suspended ? '▶️ Réactiver le compte' : '⏸️ Suspendre le compte' }}
+              {{ d.suspended ? 'Réactiver le compte' : 'Suspendre le compte' }}
             </button>
-            <button class="btn btn--ghost btn--sm" (click)="giveCredit(d)">🎁 Offrir / prolonger</button>
-            <button class="btn btn--ghost btn--sm" (click)="askMessage(d)">💬 Message</button>
+            <button class="btn btn--ghost btn--sm" (click)="giveCredit(d)">Offrir / prolonger</button>
+            <button class="btn btn--ghost btn--sm" (click)="askMessage(d)">Message</button>
           </div>
 
           <h3>Identité de l’entreprise</h3>
@@ -225,16 +339,17 @@ const PLAN_OPTIONS = [
 
           <h3>Compte et usage</h3>
           <div class="grid2">
-            <div><span>Statut</span><b>{{ d.suspended ? '⏸️ Suspendu' : d.status === 'active' ? 'Actif' : 'Inscription en cours' }}</b></div>
+            <div><span>Statut</span><b>{{ d.suspended ? 'Suspendu' : d.status === 'active' ? 'Actif' : 'Inscription en cours' }}</b></div>
             <div><span>Inscrit le</span><b>{{ d.createdAt | date:'dd/MM/yyyy' }}</b></div>
             <div><span>Abonnement</span><b>{{ d.planLabel }} — {{ d.price }} DH/mois</b></div>
-            <div><span>Valable jusqu’au</span><b>{{ d.plan === 'trial' ? '— (essai)' : d.expired ? '⚠️ Expiré' : (d.planUntil | date:'dd/MM/yyyy') + ' (' + d.daysLeft + ' j)' }}</b></div>
+            <div><span>Valable jusqu’au</span><b>{{ d.plan === 'trial' ? '— (essai)' : d.expired ? 'Expiré' : (d.planUntil | date:'dd/MM/yyyy') + ' (' + d.daysLeft + ' j)' }}</b></div>
             <div><span>Quota consommé</span><b>{{ d.used }} / {{ d.limit }}</b></div>
             <div><span>Clients enregistrés</span><b>{{ d.clients ?? 0 }}</b></div>
             <div><span>Langue / canal</span><b>{{ langLabel(d.lang) }}{{ d.voice ? ' · vocal' : '' }}</b></div>
             <div><span>Cachet</span><b>{{ d.hasStamp ? 'Enregistré' : 'Absent' }}</b></div>
             <div><span>Logo</span><b>{{ d.hasLogo ? 'Enregistré' : 'Absent' }}</b></div>
           </div>
+
           <h3>Clients enregistrés ({{ d.clients ?? 0 }})</h3>
           <table class="table mini">
             <tbody>
@@ -284,30 +399,138 @@ const PLAN_OPTIONS = [
     }
   `,
   styles: [`
-    .pg-title { font-size: 1.5rem; margin-bottom: 1.25rem; }
+    :host { display: block; }
     .alert { background: #fdecea; color: #b3261e; padding: .8rem 1rem; border-radius: 10px; margin-bottom: 1rem; }
-    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
-    .kpi { background: var(--c-surface, #fff); border: 1px solid var(--c-border, #e3e6ee); border-radius: 12px; padding: .9rem 1rem;
-      b { display: block; font-size: 1.4rem; } span { color: var(--c-text-soft, #6b7280); font-size: .78rem; } }
-    .kpi.gold b { color: #a8761c; }
-    .kpi.warn b { color: #b3261e; }
+
+    /* ─── Cockpit or-nuit ─── */
+    .hero { background: linear-gradient(135deg, #14161f 0%, #1d2030 55%, #23273a 100%);
+      border-radius: 18px; padding: 1.4rem 1.6rem 1.5rem; color: #fff; margin-bottom: 1.2rem;
+      position: relative; overflow: hidden; }
+    .hero::after { content: ''; position: absolute; top: -60px; right: -40px; width: 260px; height: 260px;
+      background: radial-gradient(circle, rgba(232,182,76,.16), transparent 65%); pointer-events: none; }
+    .hero__brand { display: flex; align-items: center; gap: .8rem; margin-bottom: 1.2rem; }
+    .hero__mark { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
+      background: linear-gradient(135deg, #f0c469, #c9902a); color: #17120a; font-weight: 800; font-size: 1.3rem; }
+    .hero__brand h1 { font-size: 1.25rem; margin: 0; color: #fff; }
+    .hero__date { font-size: .78rem; color: #9aa1b5; text-transform: capitalize; }
+    .hero__copy { margin-left: auto; font-size: .78rem; font-weight: 700; color: #e8b64c;
+      border: 1px solid rgba(232,182,76,.45); border-radius: 999px; padding: .45rem .9rem;
+      background: rgba(232,182,76,.08); cursor: pointer; transition: .15s; }
+    .hero__copy:hover { background: rgba(232,182,76,.18); }
+
+    .hero__grid { display: grid; grid-template-columns: 1.15fr 1.3fr .8fr; gap: 1.6rem; }
+    @media (max-width: 980px) { .hero__grid { grid-template-columns: 1fr; gap: 1.2rem; } }
+    .lbl { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: #8b93a8; margin-bottom: .45rem; }
+
+    .hero__mrr strong { font-size: 2.6rem; line-height: 1; color: #f0c469; font-weight: 800; }
+    .hero__mrr strong em { font-style: normal; font-size: 1.1rem; color: #b99a55; }
+    .pot { display: block; margin-top: .45rem; font-size: .82rem; color: #7fd6a6; font-weight: 600; }
+    .pot.dim { color: #9aa1b5; }
+    .dist { display: flex; gap: 3px; height: 9px; border-radius: 6px; overflow: hidden; margin-top: .9rem; }
+    .dist i { display: block; min-width: 8px; }
+    .seg-trial { background: #4a5164; } .seg-p15 { background: #6ea8fe; }
+    .seg-p30 { background: #a885f7; } .seg-p100 { background: #f0c469; }
+    .dist-legend { display: flex; gap: .9rem; flex-wrap: wrap; margin-top: .45rem; font-size: .72rem; color: #9aa1b5; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 3px; margin-right: .3rem; }
+
+    .funnel { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
+    .step { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+      border-radius: 12px; padding: .55rem .9rem; text-align: center; min-width: 84px; }
+    .step b { display: block; font-size: 1.35rem; }
+    .step span { font-size: .68rem; color: #9aa1b5; }
+    .step.gold { border-color: rgba(232,182,76,.5); background: rgba(232,182,76,.1); }
+    .step.gold b { color: #f0c469; }
+    .arr { font-size: .8rem; color: #8b93a8; font-weight: 700; white-space: nowrap; }
+    .arr .pcent { font-size: .65rem; }
+    .arr.gold { color: #e8b64c; }
+    .funnel-hint { display: block; margin-top: .55rem; font-size: .75rem; color: #9aa1b5; }
+
+    .hero__month .mrow { display: flex; align-items: baseline; gap: .5rem; padding: .3rem 0; }
+    .hero__month .mrow b { font-size: 1.05rem; min-width: 86px; }
+    .hero__month .mrow span { font-size: .74rem; color: #9aa1b5; }
+    .hero__month .mrow.warn b { color: #ff9c9c; }
+
+    /* ─── File du jour ─── */
+    .queue { margin-bottom: 1.2rem; }
+    .queue h2 { font-size: 1rem; margin: 0 0 .7rem; display: flex; align-items: center; gap: .5rem; }
+    .badge { background: #b45309; color: #fff; font-size: .72rem; font-weight: 800;
+      border-radius: 999px; padding: .15rem .55rem; }
+    .queue__scroll { display: flex; gap: .8rem; overflow-x: auto; padding-bottom: .4rem;
+      scroll-snap-type: x proximity; }
+    .qcard { flex: 0 0 265px; scroll-snap-align: start; border-radius: 14px; padding: .9rem 1rem;
+      background: #fff; border: 1px solid var(--c-border, #e3e6ee); border-top: 3px solid #9aa1b5; }
+    .qcard.q-upgrade { border-top-color: #c9902a; background: #fffdf6; }
+    .qcard.q-renew { border-top-color: #b45309; background: #fffaf3; }
+    .qcard.q-expired { border-top-color: #b3261e; background: #fff7f6; }
+    .qcard.q-dormant { border-top-color: #6ea8fe; }
+    .qhead { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+    .qtag { font-size: .64rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #8b6a1f; }
+    .q-renew .qtag, .q-expired .qtag { color: #b3261e; }
+    .q-dormant .qtag { color: #3b6cb7; }
+    .qwho { font-size: .82rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .qwhy { font-size: .76rem; color: var(--c-text-soft, #6b7280); margin: 0 0 .6rem; line-height: 1.45; }
+    .qacts { display: flex; gap: .4rem; flex-wrap: wrap; }
+    .qbtn { font-size: .72rem; font-weight: 700; border-radius: 999px; padding: .32rem .7rem;
+      border: 1px solid var(--c-border, #e3e6ee); background: #fff; cursor: pointer;
+      color: #10131c; text-decoration: none; }
+    .qbtn--main { background: linear-gradient(135deg, #f0c469, #c9902a); border: 0; color: #17120a; }
+
+    /* ─── Segments ─── */
+    .segments { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .8rem; }
+    .segments button { font-size: .8rem; font-weight: 600; padding: .42rem .8rem; border-radius: 999px;
+      border: 1.5px solid var(--c-border, #e3e6ee); background: #fff; cursor: pointer; color: #4b5563; }
+    .segments button b { font-weight: 800; margin-left: .25rem; color: #9aa1b5; }
+    .segments button.on { background: #14161f; border-color: #14161f; color: #fff; }
+    .segments button.on b { color: #f0c469; }
+
     .bar { display: flex; gap: .6rem; margin-bottom: 1rem; flex-wrap: wrap;
       input { flex: 1; min-width: 220px; } input, select { padding: .55rem .7rem; border-radius: 9px; border: 1.5px solid var(--c-border, #e3e6ee); } }
     .tbl-wrap { padding: .5rem; overflow-x: auto; }
     .table td { vertical-align: top; }
+    .table tbody tr:hover { background: #fafbfd; }
     tr.dim { opacity: .62; }
-    .meta { color: var(--c-text-soft, #6b7280); font-size: .74rem; margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; }
-    .meta.big { font-size: .9rem; margin-bottom: 1rem; }
+    .meta { color: var(--c-text-soft, #6b7280); font-size: .74rem; margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .meta.big { font-size: .9rem; margin: 0; }
     .tag { background: #eef1f7; border-radius: 999px; padding: 1px 8px; }
     code { background: #f4f5f9; padding: 2px 6px; border-radius: 6px; font-size: .82rem; }
-    select { padding: .35rem .5rem; border-radius: 8px; border: 1.5px solid var(--c-border, #e3e6ee); font-size: .85rem; }
+
+    .who { display: flex; gap: .7rem; align-items: flex-start; }
+    .avatar { width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0; display: grid; place-items: center;
+      background: #e8eaf1; color: #4b5563; font-weight: 800; font-size: .82rem; }
+    .avatar--gold { background: linear-gradient(135deg, #f0c469, #c9902a); color: #17120a; }
+    .avatar--big { width: 48px; height: 48px; font-size: 1rem; }
+
+    .health { display: inline-flex; align-items: center; gap: .38rem; font-size: .76rem; font-weight: 700;
+      border-radius: 999px; padding: .28rem .65rem; white-space: nowrap; }
+    .health i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+    .h-active { background: #e7f8ef; color: #0c6b45; } .h-active i { background: #10b981; }
+    .h-upgrade { background: #fdf3dd; color: #8b6a1f; } .h-upgrade i { background: #c9902a; }
+    .h-renew { background: #fef3c7; color: #92400e; } .h-renew i { background: #d97706; }
+    .h-expired { background: #fee2e2; color: #991b1b; } .h-expired i { background: #ef4444; }
+    .h-dormant { background: #e8effc; color: #3b6cb7; } .h-dormant i { background: #6ea8fe; }
+    .h-onboarding { background: #f1f2f4; color: #6b7280; } .h-onboarding i { background: #9aa1b5; }
+    .h-suspended { background: #f1f2f4; color: #6b7280; } .h-suspended i { background: #6b7280; }
+
+    .plansel { padding: .35rem .6rem; border-radius: 999px; border: 1.5px solid var(--c-border, #e3e6ee);
+      font-size: .78rem; font-weight: 700; cursor: pointer; max-width: 170px; }
+    .plansel.p-trial { background: #f1f2f4; color: #4b5563; }
+    .plansel.p-p15 { background: #e8effc; color: #234f8d; border-color: #cddcf7; }
+    .plansel.p-p30 { background: #efe9fd; color: #5b21b6; border-color: #ded1fa; }
+    .plansel.p-p100 { background: #fdf3dd; color: #8b6a1f; border-color: #f1dfae; }
+
     .quota { width: 90px; height: 7px; background: #eef1f7; border-radius: 6px; overflow: hidden;
-      i { display: block; height: 100%; background: #2f9e6d; } i.full { background: #b3261e; } }
+      i { display: block; height: 100%; background: #2f9e6d; }
+      i.mid { background: #d99e06; } i.full { background: #b3261e; } }
+    .opp { color: #8b6a1f; }
+    .inv-n { font-size: .95rem; }
     .acts { display: flex; gap: .4rem; flex-wrap: wrap; }
+    .wa { color: #0c6b45; }
     .empty-td { text-align: center; color: var(--c-text-soft, #6b7280); padding: 1.5rem; }
     .modal { position: fixed; inset: 0; background: rgba(10,12,20,.45); display: grid; place-items: center; z-index: 90; padding: 16px; }
     .sheet { position: relative; background: #fff; border-radius: 16px; padding: 26px; max-width: 640px; width: 100%; max-height: 86vh; overflow: auto;
       h2 { margin: 0 0 4px; } h3 { margin: 18px 0 8px; font-size: 1rem; } }
+    .sheet-head { display: flex; gap: .9rem; align-items: center; margin-bottom: .9rem; }
     .x { position: absolute; top: 12px; right: 14px; border: 0; background: none; font-size: 1.6rem; cursor: pointer; line-height: 1; }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
       > div { background: #f7f8fb; border-radius: 10px; padding: 10px 12px; }
@@ -337,6 +560,7 @@ export class AdminFatoraComponent implements OnInit {
   private seo = inject(SeoService);
 
   readonly plans = PLAN_OPTIONS;
+  readonly todayLabel = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   stats = signal<FatoraStats | null>(null);
   tenants = signal<FatoraTenant[]>([]);
   detail = signal<FatoraTenant | null>(null);
@@ -344,9 +568,11 @@ export class AdminFatoraComponent implements OnInit {
   invoices = signal<FatoraInvoice[]>([]);
   showInvoices = signal(false);
   editing = signal(false);
+  copied = signal(false);
   error = signal<string>('');
+  segment = signal<Segment>('');
   q = '';
-  planFilter = '';
+  sortMode = 'risk';
   invQ = '';
   invSort = 'amount';
   form: EditForm = {
@@ -369,9 +595,182 @@ export class AdminFatoraComponent implements OnInit {
     });
     const params: string[] = [];
     if (this.q.trim()) params.push('q=' + encodeURIComponent(this.q.trim()));
-    if (this.planFilter) params.push('plan=' + this.planFilter);
     this.http.get<FatoraTenant[]>(this.api('/tenants' + (params.length ? '?' + params.join('&') : '')))
       .subscribe({ next: (t) => this.tenants.set(t), error: () => {} });
+  }
+
+  // ─── Lecture du parc ───────────────────────────────────────
+
+  /** Santé dérivée d'un compte — le tri et la file du jour s'appuient dessus. */
+  health(t: FatoraTenant): { key: string; label: string; weight: number } {
+    if (t.suspended) return { key: 'suspended', label: 'Suspendu', weight: 2 };
+    if (t.status === 'onboarding') return { key: 'onboarding', label: 'Inscription', weight: 3 };
+    if (t.expired) return { key: 'expired', label: 'Expiré', weight: 0 };
+    if (t.exhausted) return { key: 'upgrade', label: 'À convertir', weight: 0 };
+    if ((t.daysLeft ?? 99) <= 7 && t.plan !== 'trial') return { key: 'renew', label: 'À renouveler', weight: 1 };
+    if (!t.invoices || this.daysSince(t.lastInvoiceAt) > 14) return { key: 'dormant', label: 'Dormant', weight: 4 };
+    return { key: 'active', label: 'Actif', weight: 5 };
+  }
+
+  private daysSince(iso?: string | null): number {
+    if (!iso) return 999;
+    return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  }
+
+  segments = computed(() => {
+    const all = this.tenants();
+    const n = (f: (t: FatoraTenant) => boolean) => all.filter(f).length;
+    return [
+      { key: '' as Segment, label: 'Tous', n: all.length },
+      { key: 'paying' as Segment, label: 'Payants', n: n(t => t.plan !== 'trial' && !t.suspended) },
+      { key: 'trial' as Segment, label: 'En essai', n: n(t => t.plan === 'trial' && t.status !== 'onboarding') },
+      { key: 'exhausted' as Segment, label: 'Quota épuisé', n: n(t => t.exhausted) },
+      { key: 'expiring' as Segment, label: 'Échéance ≤ 7 j', n: n(t => !t.expired && (t.daysLeft ?? 99) <= 7 && t.plan !== 'trial') },
+      { key: 'onboarding' as Segment, label: 'Inscriptions', n: n(t => t.status === 'onboarding') },
+      { key: 'suspended' as Segment, label: 'Suspendus', n: n(t => !!t.suspended) },
+    ].filter(s => s.key === '' || s.n > 0);
+  });
+
+  visibleTenants = computed(() => {
+    const seg = this.segment();
+    let list = this.tenants().filter(t => {
+      switch (seg) {
+        case 'paying': return t.plan !== 'trial' && !t.suspended;
+        case 'trial': return t.plan === 'trial' && t.status !== 'onboarding';
+        case 'exhausted': return t.exhausted;
+        case 'expiring': return !t.expired && (t.daysLeft ?? 99) <= 7 && t.plan !== 'trial';
+        case 'onboarding': return t.status === 'onboarding';
+        case 'suspended': return !!t.suspended;
+        default: return true;
+      }
+    });
+    const mode = this.sortMode;
+    list = [...list];
+    if (mode === 'risk') list.sort((a, b) => this.health(a).weight - this.health(b).weight);
+    else if (mode === 'recent') list.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+    else if (mode === 'revenue') list.sort((a, b) => b.price - a.price);
+    else if (mode === 'usage') list.sort((a, b) => (b.invoices || 0) - (a.invoices || 0));
+    return list;
+  });
+
+  /** File du jour : chaque signal devient une action, message déjà rédigé. */
+  actionQueue = computed(() => {
+    const out: { kind: string; tag: string; tenant: FatoraTenant; why: string; cta: string; template: string }[] = [];
+    for (const t of this.tenants()) {
+      if (t.suspended || t.status === 'onboarding') continue;
+      const name = t.company || 'cher client';
+      if (t.exhausted) {
+        out.push({
+          kind: 'upgrade', tag: 'Revenu à prendre', tenant: t,
+          why: `Quota ${t.used}/${t.limit} épuisé — il ne peut plus facturer. C'est le moment idéal pour proposer le plan supérieur.`,
+          cta: 'Proposer l’upgrade',
+          template: `Bonjour ${name}, votre quota de ${t.limit} factures est atteint — bravo pour l'activité ! Pour continuer sans interruption, je peux activer le plan supérieur immédiatement. Souhaitez-vous que je vous envoie les détails ?`
+        });
+      } else if (t.expired) {
+        out.push({
+          kind: 'expired', tag: 'Abonnement expiré', tenant: t,
+          why: 'Son abonnement est arrivé à terme — chaque jour sans relance augmente le risque de le perdre.',
+          cta: 'Relancer',
+          template: `Bonjour ${name}, votre abonnement Fatora-Bot est arrivé à échéance. Vos données et votre numérotation sont intactes : un simple renouvellement et vous refacturez dans la minute. Je vous envoie les modalités ?`
+        });
+      } else if ((t.daysLeft ?? 99) <= 7 && t.plan !== 'trial') {
+        out.push({
+          kind: 'renew', tag: `Échéance dans ${t.daysLeft} j`, tenant: t,
+          why: `Son plan ${t.planLabel} expire le ${new Date(t.planUntil!).toLocaleDateString('fr-FR')}. Une relance maintenant évite l'interruption.`,
+          cta: 'Rappeler l’échéance',
+          template: `Bonjour ${name}, petit rappel : votre abonnement Fatora-Bot arrive à échéance dans ${t.daysLeft} jour(s). Pour éviter toute interruption de facturation, je peux le renouveler dès maintenant. On procède ?`
+        });
+      } else if (t.plan === 'trial' && t.used >= t.limit - 1 && t.used > 0) {
+        out.push({
+          kind: 'upgrade', tag: 'Essai presque fini', tenant: t,
+          why: `${t.used}/${t.limit} factures d'essai utilisées — il a testé, c'est le moment de convertir.`,
+          cta: 'Proposer un plan',
+          template: `Bonjour ${name}, vous avez bien pris en main Fatora-Bot. Pour continuer à facturer sans limite d'essai, le plan TPE démarre à 30 DH/mois. Je vous l'active ?`
+        });
+      } else if (t.plan === 'trial' && t.used === 0 && this.daysSince(t.createdAt) >= 2) {
+        out.push({
+          kind: 'dormant', tag: 'Essai jamais utilisé', tenant: t,
+          why: `Inscrit il y a ${this.daysSince(t.createdAt)} j, aucune facture émise. Un petit coup de main le débloquerait.`,
+          cta: 'Proposer de l’aide',
+          template: `Bonjour ${name}, je vois que vous n'avez pas encore émis votre première facture sur Fatora-Bot. Voulez-vous que je vous guide ? Dictez simplement « فاتورة ل [nom du client] » et je m'occupe du reste.`
+        });
+      }
+    }
+    const order: Record<string, number> = { upgrade: 0, expired: 1, renew: 2, dormant: 3 };
+    return out.sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9)).slice(0, 8);
+  });
+
+  /** MRR supplémentaire si chaque essai actif passait au plan d'entrée. */
+  potentialMrr = computed(() => {
+    const entry = PLAN_OPTIONS.find(p => p.key === 'p15')?.price ?? 30;
+    return this.tenants().filter(t => t.plan === 'trial' && t.status !== 'onboarding' && !t.suspended).length * entry;
+  });
+
+  planDist = computed(() => {
+    const all = this.tenants();
+    return [
+      { key: 'p100', label: 'Entreprise', short: 'Ent.', n: all.filter(t => t.plan === 'p100').length },
+      { key: 'p30', label: 'Commerce', short: 'Com.', n: all.filter(t => t.plan === 'p30').length },
+      { key: 'p15', label: 'TPE', short: 'TPE', n: all.filter(t => t.plan === 'p15').length },
+      { key: 'trial', label: 'Essai', short: 'Essai', n: all.filter(t => t.plan === 'trial').length },
+    ];
+  });
+
+  ratio(a: number, b: number): number { return b > 0 ? Math.round((a / b) * 100) : 0; }
+
+  conversionHint(): string {
+    const s = this.stats();
+    if (!s) return '';
+    const started = s.trial + s.paying;
+    if (!started) return 'Aucun essai démarré pour le moment.';
+    const rate = this.ratio(s.paying, started);
+    if (rate >= 40) return 'Excellente conversion — le produit convainc.';
+    if (rate >= 20) return 'Conversion correcte — la file du jour aide à faire mieux.';
+    return 'Marge de progression : chaque essai accompagné convertit mieux.';
+  }
+
+  // ─── Actions ───────────────────────────────────────────────
+
+  /** Lien WhatsApp direct vers le commerçant, depuis votre propre téléphone. */
+  waLink(t: FatoraTenant): string { return `https://wa.me/${t.phone.replace(/\D/g, '')}`; }
+
+  initials(t: FatoraTenant): string {
+    const src = (t.company || '').trim();
+    if (!src) return '·';
+    const parts = src.split(/\s+/).filter(Boolean);
+    return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || src[0].toUpperCase();
+  }
+
+  /** Envoie le message pré-rédigé de la file du jour — modifiable avant envoi. */
+  sendTemplate(a: { tenant: FatoraTenant; template: string }) {
+    const text = prompt(`Message WhatsApp à ${a.tenant.company || a.tenant.phone} (envoyé par le bot) :`, a.template);
+    if (!text || !text.trim()) return;
+    this.http.post(this.api(`/tenants/${a.tenant.id}/message`), { text }).subscribe({
+      next: () => alert('Message envoyé.'),
+      error: (e) => alert(e?.error?.error || 'Envoi impossible.')
+    });
+  }
+
+  /** Récap du jour prêt à coller dans WhatsApp / notes. */
+  copyBrief() {
+    const s = this.stats();
+    if (!s) return;
+    const lines = [
+      `Fatora-Bot — ${this.todayLabel}`,
+      `MRR : ${s.mrr} DH (${s.paying} payants / ${s.tenants} comptes)`,
+      `Ce mois : ${s.invoicesMonth} factures, ${Math.round(s.billedMonth).toLocaleString('fr-FR')} DH facturés`,
+    ];
+    const queue = this.actionQueue();
+    if (queue.length) {
+      lines.push('', 'A traiter :');
+      for (const a of queue) lines.push(`- ${a.tenant.company || '+' + a.tenant.phone} : ${a.tag}`);
+    } else {
+      lines.push('', 'Rien a traiter aujourd’hui.');
+    }
+    navigator.clipboard?.writeText(lines.join('\n')).then(() => {
+      this.copied.set(true);
+      setTimeout(() => this.copied.set(false), 2500);
+    });
   }
 
   pct(t: FatoraTenant) { return Math.min(100, Math.round((t.used / Math.max(1, t.limit)) * 100)); }
